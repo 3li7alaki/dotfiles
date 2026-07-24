@@ -1,0 +1,61 @@
+# config.local.toml — per-box overrides (gitignored; copy this file to the repo root
+# as `config.local.toml` and keep only the keys that differ on THIS machine).
+#
+# Anything here deep-merges over config.toml: same tables, same keys, local wins.
+# Base config.toml assumes the conservative box (no codex/gpt-5.5). A box WITH
+# codex access typically overrides like this:
+
+# [tools.codex]
+# enabled = true               # codex binary + gpt-5.5 access on this box
+
+# [engines."gpt-5.5"]
+# active = true
+
+# [routing]
+# bulk     = "gpt-5.5"         # top pick for bulk when available
+# fallback = ["gpt-5.5", "glm", "opus-4.8"]
+
+# A machine that should not install or activate the SlayZone/T3 workspace can disable
+# either app and the dependent generated agent instructions disappear automatically:
+# [apps.slayzone]
+# enabled = false
+# [apps.t3code]
+# enabled = false
+
+# Or keep both apps while disabling only their shared agent workflow:
+# [integrations.slayzone-t3-workflow]
+# enabled = false
+
+# Disable ripgrep installation and remove its generated Claude/Codex preference:
+# [tools.ripgrep]
+# enabled = false
+# [tools.fd]
+# enabled = false
+# [tools.github-cli]
+# enabled = false
+# [tools.jq]
+# enabled = false
+# [tools.fzf]
+# enabled = false
+
+# Static configs are independently switchable. Disabling tmux itself also deactivates
+# its Stow package because the package declares tmux as a required tool:
+# [stow.tmux]
+# enabled = false
+
+# pass is installed by default, but GPG key creation/import and store initialization
+# remain manual. Disable it on machines that should not have local secret access:
+# [tools.pass]
+# enabled = false
+
+# A box without a GLM key would instead disable that engine:
+# [engines.glm]
+# active = false
+
+# Whole entries can be ADDED per-box too — e.g. a skill symlinked to a project
+# checkout that only exists on this machine:
+# [skills.example-design-system]
+# enabled = true
+# type    = "symlink"
+# target  = "HOME/Projects/example-design-system"
+# desc    = "example design system — local checkout"

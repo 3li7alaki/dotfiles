@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Local model control — llama-server daemon + GGUF registry (~/.local/share/models).
+# The active model is the `local.gguf` symlink; the daemon serves whatever it points at.
+#   model status              active model + daemon state
+#   model on | off            start / stop the daemon (model also idle-unloads after 10min)
+#   model list                downloaded models in the registry (* = active)
+#   model use  <file.gguf>    switch active model + restart daemon
+#   model pull <repo> <file>  download a GGUF from a Hugging Face repo into the registry
+set -euo pipefail
+label="local-model"; plist="$HOME/Library/LaunchAgents/$label.plist"; uid="$(id -u)"
+mdir="$HOME/.local/share/models"; active="$mdir/local.gguf"
+restart(){ launchctl kickstart -k "gui/$uid/$label" 2>/dev/null || { [ -f "$plist" ] && launchctl bootstrap "gui/$uid" "$plist" 2>/dev/null; }; }
+
+case "${1:-status}" in
+  on)
+    [ -f "$plist" ] || { echo "no daemon plist — run setup.sh"; exit 1; }
+    launchctl bootstrap "gui/$uid" "$plist" 2>/dev/null || launchctl kickstart "gui/$uid/$label"
+    echo "model: ON (:8080)" ;;
+  off)
+    launchctl bootout "gui/$uid/$label" 2>/dev/null && echo "model: OFF" || echo "model: already off" ;;
+  status)
+    cur=$(readlink "$active" 2>/dev/null | xargs -r basename 2>/dev/null); cur=${cur:-none}
+    curl -s -m 3 http://127.0.0.1:8080/health 2>/dev/null | grep -q '"status":"ok"' && srv="serving :8080" || srv="stopped/loading"
+    echo "active: $cur"; echo "daemon: $srv" ;;
+  list)
+    act=$(readlink "$active" 2>/dev/null | xargs -r basename 2>/dev/null)
+    shopt -s nullglob
+    for f in "$mdir"/*.gguf; do
+      b=$(basename "$f"); [ "$b" = "local.gguf" ] && continue
+      m=" "; [ "$b" = "$act" ] && m="*"
+      printf "  %s %-45s %s\n" "$m" "$b" "$(du -h "$f" | cut -f1)"
+    done ;;
+  use)
+    f="${2:?usage: model use <file.gguf>}"
+    [ -f "$mdir/$f" ] || { echo "not in registry: $f  (run: model list)"; exit 1; }
+    ln -sfn "$mdir/$f" "$active"; restart
+    echo "model: switched to $f (daemon restarting)" ;;
+  pull)
+    repo="${2:?usage: model pull <hf-repo> <file.gguf>}"; file="${3:?usage: model pull <hf-repo> <file.gguf>}"
+    url="https://huggingface.co/$repo/resolve/main/$file"; mkdir -p "$mdir"
+    if command -v aria2c >/dev/null 2>&1; then
+      aria2c -c -x16 -s16 -j16 --file-allocation=none -d "$mdir" -o "$file" "$url"
+    else
+      curl -L --fail -C - -o "$mdir/$file" "$url"
+    fi
+    echo "pulled $file → registry.  activate with: model use $file" ;;
+  *) echo "usage: model {status|on|off|list|use <file>|pull <repo> <file>}" >&2; exit 2 ;;
+esac

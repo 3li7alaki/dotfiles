@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Always launch the current T3 Code web/desktop distribution from this shell's context.
+set -euo pipefail
+exec npx -y t3@latest "$@"

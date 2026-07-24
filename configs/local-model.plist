@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Local model endpoint as a launchd LaunchAgent (macOS only).
+
+  setup.sh renders this template: LABEL, PROGRAM_ARGS (per [daemons.local-model].runtime),
+  MODEL, PORT and HOME are substituted, then it lands in ~/Library/LaunchAgents/ and is
+  bootstrapped. Never edit the rendered copy — edit this template and re-run setup.
+
+  KeepAlive keeps the SERVER reachable; --sleep-idle-seconds lets the MODEL unload itself
+  when idle. Those are different things and you want both: the port always answers, but a
+  20GB model does not squat on your RAM while you're doing real work. Without the second
+  one, a resident model is a permanent tax and you will kill the daemon within a week.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>LABEL</string>
+
+  <key>ProgramArguments</key>
+  <array>
+PROGRAM_ARGS
+  </array>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>KeepAlive</key>
+  <true/>
+
+  <!-- Local inference is a background citizen. Nice it down so a long verification pass
+       never makes the machine feel slow — nothing is ever waiting on this interactively. -->
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>Nice</key>
+  <integer>5</integer>
+
+  <key>StandardOutPath</key>
+  <string>HOME/.local/state/local-model.log</string>
+  <key>StandardErrorPath</key>
+  <string>HOME/.local/state/local-model.log</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+</dict>
+</plist>

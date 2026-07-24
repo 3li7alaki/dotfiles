@@ -1,0 +1,22 @@
+providers:
+  - id: llamacpp
+    name: llama.cpp (local)
+    base_url: http://127.0.0.1:8080/v1   # llama-server; Raycast appends /chat/completions + /models
+    api_keys:
+      default: dummy-not-used            # llama-server has no auth; Raycast just wants a key field
+    models:
+      - id: local                        # matches llama-server --alias local (stable across model swaps)
+        name: "Local (llama-server)"      # generic — stays honest whatever `model use` loads
+        provider: default
+        context: 32768                    # matches daemon --ctx-size 32768
+        abilities:
+          temperature:
+            supported: true
+          vision:
+            supported: false              # text-only model
+          system_message:
+            supported: true
+          tools:
+            supported: false              # Raycast local tool-calling is experimental — keep off for solid chat
+          reasoning_effort:
+            supported: false              # llama-server doesn't take OpenAI reasoning_effort

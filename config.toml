@@ -1,0 +1,595 @@
+# dotfiles — the control panel.
+#
+# Flip `enabled` and re-run ./setup.sh. Each entry's `type` tells setup how to
+# install/enable or remove it — because these live in five different places
+# (PATH binaries, Claude plugins, MCP servers, settings hooks, skill symlinks).
+# Default: everything on.
+
+# ── Desktop apps (GUI plus any companion CLI) ────────────────────────────────
+
+[apps.slayzone]
+enabled = true
+type    = "desktop-app"
+install = "bash $DOTFILES/scripts/install-slayzone.sh"
+probe_darwin = "/Applications/SlayZone.app"
+probe_linux  = "COMMAND:slayzone"
+cli      = "slay"
+homepage = "https://github.com/debuglebowski/slayzone"
+desc     = "Local-first task board, worktree/terminal workspace, and agent-config library"
+
+[apps.t3code]
+enabled = true
+type    = "desktop-app"
+install = "bash $DOTFILES/scripts/install-t3code.sh"
+probe_darwin = "/Applications/T3 Code (Alpha).app"
+probe_linux  = "COMMAND:t3"
+cli      = "t3"
+homepage = "https://github.com/pingdotgg/t3code"
+desc     = "Primary multi-harness agent chat and diff-review surface"
+
+# ── Agent integrations (generated instructions; no background service) ──────────
+
+[integrations.slayzone-t3-workflow]
+enabled = true
+requires_apps = ["slayzone", "t3code"]
+desc = "SlayZone owns task/worktree/shipping; T3 is the primary chat in that existing workspace"
+
+# ── Tools (PATH binaries; some also register a Claude hook) ───────────────────
+
+[tools.stow]
+enabled = true
+type    = "binary"
+bin     = "COMMAND:stow"
+install = "bash $DOTFILES/scripts/install-stow.sh"
+homepage = "https://www.gnu.org/software/stow/"
+desc    = "Symlink-farm manager used by setup for complete, repo-owned configuration files"
+
+[tools.tmux]
+enabled = true
+type    = "binary"
+bin     = "COMMAND:tmux"
+install = "bash $DOTFILES/scripts/install-tmux.sh"
+homepage = "https://github.com/tmux/tmux"
+desc    = "Persistent terminal multiplexer for durable sessions, panes, and remote work"
+agent_guidance = """
+Use `tmux` when a requested workflow benefits from a durable terminal session, especially
+long-running commands, remote work, or several related interactive processes. Prefer named
+sessions and inspect existing sessions before creating another one. Do not attach the user's
+interactive client, inject keys into an existing pane, kill sessions, or stop the tmux server
+unless the user explicitly requests it. For ordinary short commands, use the normal execution
+tool instead of adding an unnecessary tmux layer.
+"""
+
+[tools.pass]
+enabled = true
+type    = "binary"
+bin     = "COMMAND:pass"
+install = "bash $DOTFILES/scripts/install-pass.sh"
+verify_command = "pass --version >/dev/null 2>&1 && command -v pass-env >/dev/null 2>&1 && command -v pass-fzf >/dev/null 2>&1"
+auth_check = "test -f \"${PASSWORD_STORE_DIR:-$HOME/.password-store}/.gpg-id\" && gpg --list-secret-keys --with-colons 2>/dev/null | grep -q '^sec:'"
+auth_hint = "initialize/import a GPG secret key, then run 'pass init <gpg-id>' interactively"
+homepage = "https://www.passwordstore.org/"
+desc    = "GPG-encrypted local secret store with a no-plaintext-file environment launcher"
+agent_guidance = """
+`pass` is human-owned secret storage. Never list, search, show, copy, insert, edit, remove,
+or synchronize password-store entries unless the user explicitly requests that exact
+operation. Never place decrypted values in prompts, command arguments, output, logs,
+repository files, shell history, or temporary files.
+
+For approved local/dev environment injection, use `pass-env --map <private-map> -- <command>`.
+The map contains only `ENV_NAME=pass/entry` references and belongs outside repositories,
+normally under `~/.config/pass-env/` with mode 0600. `pass-env` decrypts each entry's first
+line directly into the child process environment without printing it or writing plaintext.
+Do not combine it with `set -x`, `env`, `printenv`, debug dumps, or commands expected to
+echo their environment. This reduces accidental disclosure; it cannot hide a secret from
+the child process that receives it and is not authorization to access production secrets.
+
+`pass-fzf` is a human-facing entry-name picker and must not be launched without an
+interactive TTY and an explicit user request. Prefer `pass-fzf --clip`, which keeps the
+decrypted first line out of terminal output, over composing a selection with plain
+`pass show`. Never add a decrypted secret preview to the fzf interface.
+"""
+
+[tools.github-cli]
+enabled = true
+type    = "binary"
+bin     = "COMMAND:gh"
+install = "bash $DOTFILES/scripts/install-github-cli.sh"
+auth_check = "gh auth status >/dev/null 2>&1"
+auth_hint = "run 'gh auth login' interactively, or provide GH_TOKEN/GITHUB_TOKEN for automation"
+homepage = "https://github.com/cli/cli"
+desc    = "Official GitHub CLI for pull requests, checks, issues, releases, and API access"
+agent_guidance = """
+Prefer `gh` over browser scraping for GitHub repository state: pull requests, issues,
+workflow runs/checks, releases, and API queries. Prefer non-interactive structured output
+such as `--json` with `--jq` or `gh api` when results will be parsed or summarized.
+
+Treat authentication as user-owned. Read-only inspection is appropriate when relevant;
+creating or editing issues/PRs, commenting, merging, changing workflow state, publishing
+releases, or otherwise mutating GitHub requires authorization from the user's request.
+Never print tokens or copy authentication material into repository files.
+"""
+
+[tools.jq]
+enabled = true
+type    = "binary"
+install = "bash $DOTFILES/scripts/install-jq.sh"
+verify_command = "jq --version 2>/dev/null | grep -Eq '^jq-[0-9]'"
+homepage = "https://github.com/jqlang/jq"
+desc    = "Lightweight structural JSON querying, validation, filtering, and transformation"
+agent_guidance = """
+Prefer `jq` for inspecting, validating, filtering, and transforming JSON or JSON Lines.
+Do not parse structured JSON with `grep`, `sed`, or fragile string matching. Use `jq -e`
+when a filter's truthiness should control a command's exit status, `-r` only when raw text
+is intentionally required, and `-c` for compact machine-oriented output. Quote jq programs
+with single quotes in Unix shells.
+
+Keep Python or the project's language for complex multi-step logic, cross-format work, or
+maintainable application code. jq writes transformed data to stdout and does not edit a
+file in place; use a checked temporary output plus atomic replacement for authorized file
+edits, never redirect onto the input file. Do not pass secrets through `--arg` command-line
+arguments or print sensitive JSON fields.
+"""
+
+[tools.fzf]
+enabled = true
+type    = "binary"
+bin     = "COMMAND:fzf"
+install = "bash $DOTFILES/scripts/install-fzf.sh"
+verify_command = "fzf --version >/dev/null 2>&1 && command -v fzf-shell-init >/dev/null 2>&1"
+shell_command = "fzf-shell-init"
+shells  = ["bash", "zsh", "fish"]
+homepage = "https://github.com/junegunn/fzf"
+desc    = "Interactive fuzzy finder with shell history, path selection, and completion bindings"
+agent_guidance = """
+`fzf` is for interactive human selection, such as fuzzy shell history and choosing paths
+from a terminal. Use it when the user explicitly wants an interactive picker or when a
+human-driven workflow clearly benefits from one. Do not launch fzf in non-interactive agent
+commands or use it where a deterministic result is required; use `rg`, `fd`, `jq`, or native
+tool filters directly for automation. Never assume an fzf selection occurred without a TTY.
+"""
+
+[tools.fd]
+enabled = true
+type    = "binary"
+bin     = "COMMAND:fd"
+install = "bash $DOTFILES/scripts/install-fd.sh"
+verify_command = "fd --version 2>/dev/null | grep -Eq '^fd [0-9]'"
+homepage = "https://github.com/sharkdp/fd"
+desc    = "Fast, user-friendly path search with Git-aware filtering and concise syntax"
+agent_guidance = """
+Prefer `fd` for interactive repository path searches: filenames, extensions, entry types,
+and ordinary recursive discovery. Remember that it matches filenames rather than full
+paths by default and skips hidden and ignored entries; use `--full-path`, `--hidden`,
+`--no-ignore`, or `--unrestricted` only when the task requires those scopes.
+
+Keep `find` for existing or POSIX-portable scripts, complex predicates, filesystem edge
+cases, and environments without `fd`. Never alias `find` to `fd` or mechanically rewrite
+arbitrary find commands because their expressions and behavior are not compatible.
+"""
+
+[tools.ripgrep]
+enabled = true
+type    = "binary"
+bin     = "COMMAND:rg"
+install = "bash $DOTFILES/scripts/install-ripgrep.sh"
+homepage = "https://github.com/BurntSushi/ripgrep"
+desc    = "Fast recursive code search with Git-aware filtering and useful defaults"
+agent_guidance = """
+Prefer `rg` for interactive repository text searches and `rg --files` for file discovery.
+It is recursive by default and respects `.gitignore`, hidden-file, and binary-file filters.
+Use explicit flags when ignored or hidden content is genuinely in scope.
+
+Keep `grep` for existing scripts, POSIX-portable commands, stdin-oriented pipelines where
+it is already the clearest fit, or environments without `rg`. Never alias `grep` to `rg`
+or mechanically rewrite arbitrary grep commands: their flags and behavior are not fully
+compatible.
+"""
+
+[tools.zoxide]
+enabled = true
+type    = "binary"
+install = "curl -sSfL https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | sh"
+shells  = ["bash", "zsh", "fish"]  # setup initializes installed shells; disable removes its rc blocks
+shell_init_args = "--cmd cd"       # replace `cd` with zoxide (real dirs still work, plus jump)
+homepage = "https://github.com/ajeetdsouza/zoxide"
+desc    = "Smarter cd — jump to frequently used directories with z/zi"
+
+[tools.direnv]
+enabled = true
+type    = "binary"
+install = "brew install direnv"
+shells  = ["bash", "zsh", "fish"]
+shell_init_verb = "hook"           # `direnv hook <shell>`, not `init`
+homepage = "https://direnv.net/"
+desc    = "Per-directory env autoload from .envrc (needs `direnv allow` per repo)"
+
+[tools.model]
+enabled = true
+type    = "binary"
+os      = "darwin"
+bin     = "COMMAND:model"
+install = "mkdir -p $HOME/.local/bin && ln -sfn $DOTFILES/scripts/model $HOME/.local/bin/model"
+homepage = "https://github.com/ggml-org/llama.cpp"
+desc    = "Local model control — daemon on/off + GGUF registry (list/use/pull)"
+agent_guidance = """
+`model` controls the local llama-server LLM (daemon on 127.0.0.1:8080; GGUF registry in
+~/.local/share/models, active model = the `local.gguf` symlink). Subcommands:
+- `model status` — active model + daemon state
+- `model on` / `model off` — start/stop the daemon (the model also idle-unloads after 10min,
+  so `off` is only for a hard stop, e.g. on battery)
+- `model list` — downloaded models (* marks active)
+- `model use <file.gguf>` — switch active model + restart daemon
+- `model pull <hf-repo> <file.gguf>` — download a GGUF into the registry (aria2, resumable)
+When the user wants to try, switch, or download a local model, use these commands rather than
+hand-editing the symlink or launchctl. The config-managed default model lives in config.toml
+[daemons.local-model] (model_repo / model_file); setup auto-provisions it.
+"""
+
+[tools.aria2]
+enabled = true
+type    = "binary"
+bin     = "COMMAND:aria2c"
+install = "brew install aria2"
+homepage = "https://aria2.github.io/"
+desc    = "Multi-connection downloader — fast HF model pulls (curl single-stream throttles)"
+
+[tools.rtk]
+enabled = true
+type    = "binary"            # the Bash rewrite hook is wired via [hooks.rtk]
+install = "curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/master/install.sh | sh"
+homepage = "https://github.com/rtk-ai/rtk"
+desc    = "Rust Token Killer — token-optimizing CLI proxy"
+
+[tools.mint]
+enabled = true
+type    = "binary"           # installed from its own rolling-latest release
+install = "curl -fsSL https://raw.githubusercontent.com/3li7alaki/mint/main/install.sh | sh"
+homepage = "https://github.com/3li7alaki/mint"
+desc    = "Atomic completion ledger with snapshot-bound receipts"
+
+[tools.codex]
+enabled = true               # global default; a box w/o GPT access sets false in config.local.toml
+type    = "binary"           # already on PATH; presence-checked only
+# NB: ~/.codex/config.toml is partly machine-owned (trust levels, projects) — NOT a
+# fully-owned config file, so no config_dest here (that would clobber it). setup.sh
+# ensures just `model = "gpt-5.6-sol"` via the codex step, leaving the rest intact.
+default_model = "gpt-5.6-sol"                        # setup ensures this key; -c model=gpt-5.6-terra for mid tier
+homepage = "https://github.com/openai/codex"
+desc    = "OpenAI Codex CLI — GPT-5.6 worker"
+
+[tools.opencode]
+enabled = true
+type    = "binary"           # headless worker chassis for API-only models (GLM + local)
+install = "curl -fsSL https://opencode.ai/install | bash"
+config  = "DOTFILES/configs/opencode.json"          # GLM + local provider config, HOME rendered by setup
+config_dest = "HOME/.config/opencode/opencode.json"
+requires_file = "HOME/.glm_api_key"                 # setup warns if missing (GLM dead without it)
+homepage = "https://github.com/anomalyco/opencode"
+desc    = "OpenCode — headless agent runner; hosts GLM + the local model via opencode.json"
+
+# The local-model runtime. macOS-only; served as a launchd daemon (see [daemons.local-model]).
+# Both entries can be installed — `[daemons.local-model].runtime` decides which one actually
+# serves :8080, so you can bench them head-to-head on the real jobs and then pin the winner.
+# Pinned to llama.cpp. mlx_lm was evaluated on the M5 Pro and dropped 2026-07-17 —
+# not on speed, on maintenance. MLX co-creator Awni Hannun left Apple 2026-02; mlx-lm
+# has had no release since 2026-04-22 and its open-PR backlog (311) now exceeds its
+# open issues (198) — contributors still submit, nobody merges. Apple moved its LLM
+# investment to mlx-swift-lm/Foundation Models (WWDC26) and has no product reason to
+# maintain an OpenAI-compatible Python HTTP server. The old note here claimed MLX was
+# "the only runtime using M5 neural accelerators" — that was false: ggerganov merged
+# the Metal4 tensor API (llama.cpp#16634) 2025-11-06, two weeks BEFORE Apple published
+# its own MLX M5 post, and without owning M5 hardware.
+#
+# MLX *core* is healthy and still worth knowing about. If it is ever wanted here again:
+#   - inference  -> Ollama's MLX engine or LM Studio's mlx-engine (both maintained;
+#                   mlx_lm.server is not). Only reconsider if mlx-lm merges its MTP PR
+#                   (#990, open since 2026-03) and the decode gap actually reopens.
+#   - fine-tuning -> mlx_lm.lora, the ONLY local LoRA/QLoRA trainer on Metal. llama.cpp
+#                   removed training in 2024 and its WIP path is FP32/CPU/CUDA-only.
+#                   This is the one thing llama.cpp structurally cannot do.
+[tools.llama-server]
+enabled = true
+type    = "binary"
+os      = "darwin"                                  # setup skips + verify ignores on non-darwin
+install = "brew install llama.cpp"                  # upstream ONLY: LM Studio's bundled runtime
+                                                    # silently fails the tensor-API check and forfeits
+                                                    # ~2.4x prefill (lmstudio-bug-tracker#2040).
+                                                    # Verify: startup log must NOT say
+                                                    # "tensor API is not supported ... disabling".
+homepage = "https://github.com/ggml-org/llama.cpp"
+desc    = "llama.cpp server — local OpenAI endpoint; wins on ops, MTP, and M5 tensor-API prefill"
+
+# ── Static configuration packages (GNU Stow; setup remains the entry point) ──
+# Complete files belong here. Generated, marker-managed, secret, and machine-local files do not.
+
+[stow.tmux]
+enabled = true
+package = "tmux"
+target  = "HOME"
+requires_tools = ["stow", "tmux"]
+links   = [".tmux.conf", ".local/bin/tmux-copy"]
+homepage = "https://github.com/tmux/tmux"
+desc    = "Portable tmux defaults and a macOS/Linux clipboard bridge"
+
+[stow.raycast]
+enabled = true
+package = "raycast"
+target  = "HOME"
+requires_tools = ["stow"]
+links   = [".config/raycast/ai/providers.yaml"]
+homepage = "https://raycast.com"
+desc    = "Raycast custom AI provider — points Raycast at the local llama-server (:8080)"
+
+# ── Skills (curated; each wired differently) ──────────────────────────────────
+
+[skills.ponytail]
+enabled = true
+type    = "plugin"           # Claude plugin + a statusline hook (managed together)
+plugin  = "ponytail@ponytail"
+marketplace = "DietrichGebert/ponytail"
+homepage = "https://github.com/DietrichGebert/ponytail"
+desc    = "Lazy-senior-dev discipline — the laziest solution that works"
+
+[skills.caveman]
+enabled = true
+type    = "plugin"           # pairs with ponytail: ponytail cuts code, caveman cuts prose
+plugin  = "caveman@caveman"
+marketplace = "JuliusBrussee/caveman"
+homepage = "https://github.com/JuliusBrussee/caveman"
+desc    = "Terse caveman-speak — ~65% fewer output tokens, code/commands byte-exact"
+
+[skills.codebase-memory]
+enabled = true
+type    = "mcp"              # MCP server; installer also drops its skills + agent wiring
+mcp     = "codebase-memory-mcp"
+bin     = "COMMAND:codebase-memory-mcp"   # setup.sh resolves via `command -v` (portable)
+install = "curl -fsSL https://raw.githubusercontent.com/DeusData/codebase-memory-mcp/main/install.sh | bash"
+configure = "codebase-memory-mcp config set auto_index true"
+verify_command = "codebase-memory-mcp config list | grep -Eq 'auto_index[[:space:]]*=[[:space:]]*true'"
+homepage = "https://github.com/DeusData/codebase-memory-mcp"
+desc    = "Auto-indexed code knowledge graph — structural queries over the codebase"
+
+[skills.impeccable]
+enabled = true
+type    = "npx-plugin"       # pbakaus/impeccable — proper global install, no symlinks
+install = "cd $HOME && printf '1\\nglobal\\n' | timeout_cmd 120 npx -y impeccable skills install || true"
+probe   = "HOME/.claude/skills/impeccable"   # present = installed, skip reinstall
+homepage = "https://github.com/pbakaus/impeccable"
+desc    = "Frontend design + UX review — anti-slop design language (impeccable.style)"
+
+[skills.pinchtab]
+enabled = true
+type    = "symlink"          # owned by dotfiles: lives in dotfiles/skills/, linked out
+target  = "DOTFILES/skills/pinchtab"   # DOTFILES resolved by setup.sh
+homepage = "https://github.com/pinchtab/pinchtab"
+desc    = "Browser automation via PinchTab"
+
+[skills.slay]
+enabled = true
+type    = "symlink"
+target  = "DOTFILES/skills/slay"
+providers = ["claude", "codex"]
+requires_apps = ["slayzone"]
+homepage = "https://github.com/debuglebowski/slayzone"
+desc    = "Runtime-discovered Slay CLI guidance shared by Claude and Codex"
+
+[skills.mint]
+enabled = true
+type    = "symlink"
+target  = "DOTFILES/skills/mint"
+providers = ["claude", "codex"]
+homepage = "https://github.com/3li7alaki/mint"
+desc    = "Dispatcher so Skill(mint) resolves to CLI guidance instead of erroring"
+
+# ── Hooks (two shapes, both idempotent, both toggled here) ────────────────────
+# `script`  → injector: SessionStart + UserPromptSubmit (ponytail pattern, never blocks)
+# `command` → event hook: wired on `event` (+ optional `matcher`)
+
+[hooks.rtk]
+enabled = true
+event   = "PreToolUse"
+matcher = "Bash"
+command = "rtk hook claude"   # rewrites Bash commands through rtk for token savings
+desc    = "rtk Bash rewrite hook — transparent token-optimized command proxy"
+
+[hooks.routing]
+enabled = true
+script  = "DOTFILES/hooks/routing-activate.sh"   # renders [routing]/[engines] live
+desc    = "Injects model routing — dispatch bulk→codex, mechanical→glm, etc."
+
+# Secret scan before a diff can ever leave the box. Two layers, deliberately asymmetric:
+#   gitleaks (regex)     → BLOCKS. Near-zero false positives on known key formats, so a
+#                          hit is almost always real. Deterministic gate = hard stop.
+#   local model (:8080)  → WARNS. Catches the long tail regex structurally cannot see:
+#                          a key concatenated across two variables, a base64'd token, a
+#                          commented-out credential. (LLMs hit ~84% recall here vs
+#                          gitleaks' ~37% — but they also false-positive, so they advise.)
+# Endpoint down → skipped silently; gitleaks still ran. A tool that hard-blocks when IT
+# breaks is a tool you rip out by Friday. Deterministic blocks, judgment escalates.
+[hooks.cbm-gate]
+enabled = true
+event   = "PreToolUse"
+matcher = "Read|Grep|Glob"
+command = "DOTFILES/hooks/cbm-code-discovery-gate.sh"
+desc    = "Nudges code discovery toward the codebase graph — blocks once per session, then allows"
+
+[hooks.secret-scan]
+enabled = true
+event   = "PreToolUse"
+matcher = "Bash"
+command = "DOTFILES/hooks/secret-scan.sh"
+desc    = "Pre-commit secret scan — gitleaks blocks, the local model warns on the long tail"
+
+# One-line Claude Code status bar, tuned to this box. Segments (priority high→low, wraps to
+# more rows when $COLUMNS is narrow — nothing dropped): ctx-bar% · 5h/7d rate limits ·
+# [model·1M] · cwd branch*⑂wt · effort⚡ · ●local-model · 🎙voice · 🖥remote · session. The
+# context bar bands on the HANDOFF threshold (~45%), not the 90% compact cliff — this box
+# never compacts; voice/remote show only when active.
+[statusline]
+enabled = true
+script  = "DOTFILES/scripts/cc-statusline.sh"
+refresh = 10          # re-run every 10s so the clock + local-model badge stay live while idle
+padding = 0
+desc    = "One-line status bar — model / ctx-handoff / rate-limits / local-model"
+
+[skills.ui-ux-pro-max]
+enabled = true
+type    = "plugin"           # replaces frontend-design; pairs with impeccable
+plugin  = "ui-ux-pro-max@ui-ux-pro-max-skill"
+marketplace = "nextlevelbuilder/ui-ux-pro-max-skill"   # setup adds this marketplace first
+homepage = "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill"
+desc    = "Design intelligence — styles, palettes, font pairings, UX guidelines"
+
+[skills.skillless]
+enabled = true
+type    = "npx-plugin"       # meta-skill: auto-discovers + installs skills on demand
+install = "npx -y skillless"
+probe   = "HOME/.claude/plugins/skillless"   # present = installed, skip reinstall
+desc    = "Skill finder — discovers/installs relevant skills on demand (/discover, /plans)"
+
+# ── Claude plugins (stock, low-churn — toggled but not curated by us) ─────────
+
+[plugins]
+enabled = [
+  { name = "commit-commands@claude-plugins-official", desc = "Commit, push, and pull-request workflows" },
+  { name = "context7@claude-plugins-official", desc = "Current library documentation lookup" },
+  { name = "gopls-lsp@claude-plugins-official", desc = "Go language-server integration" },
+  { name = "typescript-lsp@claude-plugins-official", desc = "TypeScript language-server integration" },
+  { name = "php-lsp@claude-plugins-official", desc = "PHP language-server integration" },
+  { name = "pyright-lsp@claude-plugins-official", desc = "Python language-server integration" },
+  { name = "claude-md-management@claude-plugins-official", desc = "CLAUDE.md maintenance workflows" },
+]
+homepage = "https://github.com/anthropics/claude-plugins-official"
+
+# ── Daemons (launchd background services; macOS-only, toggled like everything) ─
+# The local model's OpenAI-compatible endpoint, run as a LaunchAgent. Linux boxes skip
+# the whole section (`os = "darwin"`) and every local-routed job escalates to a cloud pool.
+#
+# RUNTIME = llama-server, pinned. The clinching reason is prompt caching, not raw speed.
+# This workload is prefill-heavy with near-zero generation (scan a diff, verify a diff,
+# answer yes/no) and re-sends the SAME system prefix every call. llama-server caches that
+# prefix by default (`cache_prompt`), so a cache hit SKIPS prefill entirely — which beats
+# any runtime that recomputes the prefix each call even if it prefills 2x faster. (mlx_lm
+# had no server-mode prompt cache at all and two open bugs firing on exactly this pattern;
+# it was dropped 2026-07-17 — see [tools.llama-server] for the full autopsy.) Anything
+# serving OpenAI-compatible on :8080 is drop-in downstream — opencode.json, [engines.local],
+# and the hooks only ever see 127.0.0.1:8080 — but the pin stays until something beats
+# cache-skipped prefill, not just cold prefill.
+#
+# WHICH model sits behind the port is deliberately not config's business: `model` is a
+# SYMLINK. Repoint it at a 4B when you need RAM back, a 35B-A3B when you don't. Nothing
+# downstream changes. Manage memory at the daemon, never in the consumers.
+# Recommended weights: unsloth/Qwen3.6-35B-A3B-GGUF at UD-Q4_K_XL (~22.4GB). MoE (3B active)
+# so it's ~3x the tok/s of a dense 27B, and 22GB leaves real headroom for KV cache — which is
+# the actual memory pressure here, not weights. Don't bother with Q6: it buys ~nothing over Q4
+# (Unsloth's own numbers: +0.24 MMLU) and eats the headroom long prompts need.
+[daemons.local-model]
+enabled  = true
+os       = "darwin"
+runtime  = "llama-server"                            # pinned 2026-07-17; mlx dropped (see [tools.llama-server])
+label    = "local-model"                             # launchd label; also the plist basename
+plist    = "DOTFILES/configs/local-model.plist"      # template; HOME/MODEL/PORT rendered by setup
+model    = "HOME/.local/share/models/local.gguf"     # SYMLINK -> whichever weights are loaded
+port     = 8080
+# Auto-provision: setup downloads model_file from the HF repo if absent, then points the
+# `model` symlink at it. Swap models by editing these two lines + re-running setup.
+model_repo = "unsloth/Qwen3.6-35B-A3B-GGUF"
+model_file = "Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf"
+desc     = "Local model endpoint (llama.cpp) — idle-unloads so it costs no RAM at rest"
+
+# ── Cron (idempotent crontab entries, marker-tagged; toggled like everything) ──
+# claude-md-management's auto-capture skill grows CLAUDE.md files during
+# sessions; this cron keeps them pruned with /revise-claude-md — no human loop.
+
+[cron.revise-claude-md]
+enabled  = true
+schedule = "0 3 * * 0"                              # Sundays 03:00
+script   = "DOTFILES/scripts/revise-claude-mds.sh"  # logs to ~/.local/state/
+desc     = "Weekly CLAUDE.md hygiene across ~/Projects repos"
+
+[cron.update-tools]
+enabled  = true
+schedule = "0 4 * * 0"                              # Sundays 04:00
+script   = "DOTFILES/scripts/update-tools.sh"       # brew upgrade + re-run installers
+desc     = "Weekly tool auto-update (latest binaries)"
+
+# ── Model routing (dispatch guidance for the agent; NO worker loop) ───────────
+# Static task-shape → model rules + a fallback order. There is NO daemon parsing
+# this — the [routing]/[engines] tables are rendered into the agent's attention
+# (via hooks/routing-activate.sh + the CLAUDE.md block) and the AGENT dispatches
+# accordingly. It's a convention the agent follows, not enforced infra. On a 429,
+# the agent walks `fallback` by hand. Keep it honest: guidance, not automation.
+#
+# Cost model is NOT list price — it's THREE flat-rate subscription pools, all
+# LIMIT-bound with ~0 marginal cost. Claude Max 5x (opus/fable/sonnet), ChatGPT
+# Pro (the GPT-5.6 family: sol/terra/luna), and the GLM Coding Plan (glm-5.2).
+# Nothing here is metered per-token. Tiebreaker isn't price, it's quota pressure:
+# spread load so no single pool's cap is the bottleneck — and match each task to
+# the pool with the right intelligence/taste, since spending a slot costs nothing.
+
+# These are the GLOBAL defaults (a box with codex+Pro+GLM). Per-box reality —
+# a machine with no codex, say — overrides in gitignored config.local.toml
+# (active=false on a GPT engine, bulk=glm, etc). Never hardcode one box here.
+[routing]
+bulk       = "gpt-5.6-terra"   # routine clear-spec impl, migrations — spares Sol's cap
+heavy      = "gpt-5.6-sol"     # hard / agentic / multi-file — the flagship coder
+mechanical = "glm"             # trivial edits, data munging — GLM coding plan (flat), spreads load off GPT/Claude
+ui         = "opus-4.8"        # anything user-facing (taste ≥ 7), Max-flat
+review     = "fable-5"         # plan/impl review — taste; add sol as cross-vendor 2nd on high stakes
+private    = "local"           # diff//data must NOT leave the box (NDA, secrets, client code) — cloud is not an option at any price
+verify     = "local"           # ASYNC closed-question checks: mint's anti-gaming lens, secret scan. Never interactive.
+fallback   = ["gpt-5.6-sol", "gpt-5.6-terra", "glm", "opus-4.8"]   # degrade across pools; all flat, so purely cap relief
+
+# Codex dispatch mechanics (verified 2026-07-14, codex 0.144.x). Rendered into attention
+# whenever a codex engine is active, so agents dispatch it correctly instead of hand-rolling.
+# Prefer the codex plugin for BACKGROUND review/rescue; raw `codex exec` for one-shot; never MCP.
+codex_usage = """
+Dispatching Codex (codex 0.144.x): pick the surface by shape.
+- Background review / rescue (streaming + pollable): use the codex plugin slash commands —
+  /codex:review, /codex:adversarial-review, /codex:rescue — with Claude Code run_in_background;
+  poll /codex:status, read /codex:result, /codex:cancel to stop. This is the clean path for a
+  long or parallel job (the codex:codex-rescue subagent wraps it).
+- One-shot headless via Bash: codex exec -s workspace-write --skip-git-repo-check "<prompt>" </dev/null
+  ALWAYS append </dev/null — piped stdin hangs ("Reading additional input from stdin...") and is
+  injected as a <stdin> block; use `codex exec -` only to deliberately feed the prompt on stdin.
+  Add --json -o out.txt for machine-readable events + a clean final message; -s read-only for
+  review/diagnosis with no edits; -m <model> or -c model="…" to pin a tier.
+- Non-interactive code review: codex exec review --uncommitted </dev/null  (or --base <ref> / --commit <sha>).
+- Do NOT wire codex as an MCP server (codex mcp-server) into Claude Code: OpenAI routes automation
+  to exec/SDK, and the stdio MCP path has documented stdin-EOF/timeout hangs. Use exec or the plugin.
+"""
+# NOTE: `local` is deliberately ABSENT from `fallback`. It is not a weaker peer of the
+# cloud tiers — it is a different SHAPE of worker. Local can't reliably hold a long
+# agentic loop (tool-call schema drifts as context fills), so falling back to it mid-loop
+# trades a clean stall for a silent half-finished diff. Local gets jobs, never leftovers.
+
+# How the agent runs each external model — model name → chassis + invocation.
+# The agent copies these `run` lines when it dispatches to a worker via Bash.
+# codex exec defaults to sol (~/.codex/config.toml model=gpt-5.6-sol); -c model= overrides per tier.
+[engines."gpt-5.6-sol"]
+run    = "codex exec"                                       # flagship, Pro-flat
+active = true
+
+[engines."gpt-5.6-terra"]
+run    = "codex exec -c model=gpt-5.6-terra"                # mid tier, Pro-flat
+active = true
+
+[engines.glm]
+run    = "opencode run --model glm/glm-5.2 --auto"  # GLM-5.2 (coding plan) via OpenCode
+active = true                                    # GLM_API_KEY set; live worker, flat coding plan
+requires_env = "GLM_API_KEY"                     # loop skips glm if this ever goes missing
+
+# The local model, hosted by llama-server on :8080, is driven through OpenCode exactly like
+# GLM — same @ai-sdk/openai-compatible provider, different baseURL. A driver records its
+# executor/vendor/model/locality/executionRef as generic mint provenance. mint has no registry
+# and does not authenticate that declared identity.
+#
+# Local is ASYNC-ONLY by design. Inference latency is irreducible and local is SLOWER than
+# your cloud pools — that is fine when nothing waits on it (a hook, a queue, a `done` gate)
+# and intolerable the moment it sits in front of your cursor. Every local tool that people
+# actually kept was async; every one they ripped out was interactive. Don't cross that line.
+[engines.local]
+run    = "opencode run --model local/local --auto"
+active = false                                   # flip true on the Mac (setup does this via config.local.toml)
+requires_endpoint = "http://127.0.0.1:8080/v1"   # setup/verify curl this; local lane is dead without it

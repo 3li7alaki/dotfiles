@@ -1,0 +1,58 @@
+#!/usr/bin/env sh
+# Emit fzf environment and shell integration for both modern and older packaged releases.
+set -eu
+
+shell=${2:-${1:-}}
+case "$shell" in
+  bash|zsh)
+    printf '%s\n' '[ -n "${FZF_DEFAULT_OPTS+x}" ] || export FZF_DEFAULT_OPTS="--height=40% --layout=reverse --border"'
+    if command -v fd >/dev/null 2>&1; then
+      printf '%s\n' '[ -n "${FZF_CTRL_T_COMMAND+x}" ] || export FZF_CTRL_T_COMMAND="fd --hidden --follow --exclude .git"'
+      printf '%s\n' '[ -n "${FZF_ALT_C_COMMAND+x}" ] || export FZF_ALT_C_COMMAND="fd --type d --hidden --follow --exclude .git"'
+    elif command -v rg >/dev/null 2>&1; then
+      printf '%s\n' '[ -n "${FZF_CTRL_T_COMMAND+x}" ] || export FZF_CTRL_T_COMMAND="rg --files --hidden --glob '\''!.git'\''"'
+    fi
+    ;;
+  fish)
+    printf '%s\n' "set -q FZF_DEFAULT_OPTS; or set -gx FZF_DEFAULT_OPTS '--height=40% --layout=reverse --border'"
+    if command -v fd >/dev/null 2>&1; then
+      printf '%s\n' "set -q FZF_CTRL_T_COMMAND; or set -gx FZF_CTRL_T_COMMAND 'fd --hidden --follow --exclude .git'"
+      printf '%s\n' "set -q FZF_ALT_C_COMMAND; or set -gx FZF_ALT_C_COMMAND 'fd --type d --hidden --follow --exclude .git'"
+    elif command -v rg >/dev/null 2>&1; then
+      printf '%s\n' "set -q FZF_CTRL_T_COMMAND; or set -gx FZF_CTRL_T_COMMAND \"rg --files --hidden --glob '!.git'\""
+    fi
+    ;;
+  *)
+    printf 'usage: fzf-shell-init init <bash|zsh|fish>\n' >&2
+    exit 2
+    ;;
+esac
+
+# fzf 0.48+ embeds matching integration scripts in the binary.
+if fzf --help 2>/dev/null | grep -q -- "--$shell"; then
+  fzf "--$shell"
+  exit 0
+fi
+
+# Older distro packages ship separate scripts in package-manager-specific locations.
+case "$shell" in
+  bash|zsh) extension="$shell" ;;
+  fish) extension="fish" ;;
+esac
+
+for directory in \
+  /usr/share/doc/fzf/examples \
+  /usr/share/fzf/shell \
+  /usr/local/share/fzf/shell \
+  /opt/homebrew/opt/fzf/shell \
+  /usr/local/opt/fzf/shell
+do
+  found=false
+  for script in "$directory/completion.$extension" "$directory/key-bindings.$extension"; do
+    if [ -r "$script" ]; then
+      printf "source '%s'\n" "$script"
+      found=true
+    fi
+  done
+  $found && exit 0
+done

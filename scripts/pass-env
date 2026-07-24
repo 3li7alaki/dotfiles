@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# Decrypt pass entries directly into one child process environment, without plaintext files.
+set -euo pipefail
+set +x
+
+usage() {
+  printf 'usage: pass-env --map <private-map> -- <command> [args...]\n' >&2
+  exit 2
+}
+
+[ "${1:-}" = "--map" ] || usage
+MAP="${2:-}"
+[ -n "$MAP" ] || usage
+shift 2
+[ "${1:-}" = "--" ] || usage
+shift
+[ "$#" -gt 0 ] || usage
+
+command -v pass >/dev/null 2>&1 || {
+  printf 'error: pass is not installed\n' >&2
+  exit 1
+}
+[ -f "$MAP" ] || {
+  printf 'error: pass-env map not found: %s\n' "$MAP" >&2
+  exit 1
+}
+
+MAP="$MAP" python3 - <<'PY'
+import os, stat
+path = os.environ["MAP"]
+info = os.stat(path)
+if info.st_uid != os.getuid():
+    raise SystemExit(f"error: pass-env map is not owned by the current user: {path}")
+if stat.S_IMODE(info.st_mode) & 0o077:
+    raise SystemExit(f"error: pass-env map must have mode 0600 (or stricter): {path}")
+PY
+
+while IFS= read -r line || [ -n "$line" ]; do
+  case "$line" in ''|'#'*) continue ;; esac
+  name="${line%%=*}"
+  entry="${line#*=}"
+  [ "$name" != "$line" ] && [ -n "$entry" ] || {
+    printf 'error: invalid pass-env mapping (expected NAME=pass/entry)\n' >&2
+    exit 1
+  }
+  if [[ ! "$name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+    printf 'error: invalid environment variable name: %s\n' "$name" >&2
+    exit 1
+  fi
+  value=$(pass show "$entry")
+  value="${value%%$'\n'*}"
+  export "$name=$value"
+  unset value
+done < "$MAP"
+
+exec "$@"

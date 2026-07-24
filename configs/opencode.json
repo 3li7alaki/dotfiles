@@ -1,0 +1,27 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "glm": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "GLM (z.ai)",
+      "options": {
+        "baseURL": "https://api.z.ai/api/coding/paas/v4",
+        "apiKey": "{file:HOME/.glm_api_key}"
+      },
+      "models": {
+        "glm-5.2": { "name": "GLM-5.2" }
+      }
+    },
+    "local": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Local (llama-server)",
+      "options": {
+        "baseURL": "http://127.0.0.1:8080/v1",
+        "apiKey": "not-needed"
+      },
+      "models": {
+        "local": { "name": "Local" }
+      }
+    }
+  }
+}

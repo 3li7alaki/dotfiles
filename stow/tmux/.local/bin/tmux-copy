@@ -1,0 +1,15 @@
+#!/usr/bin/env sh
+# Copy tmux selection stdin to the native clipboard; retain tmux's own buffer regardless.
+set -eu
+
+if [ "$(uname -s)" = "Darwin" ] && command -v pbcopy >/dev/null 2>&1; then
+  pbcopy 2>/dev/null || true
+elif [ -n "${WAYLAND_DISPLAY:-}" ] && command -v wl-copy >/dev/null 2>&1; then
+  wl-copy 2>/dev/null || true
+elif [ -n "${DISPLAY:-}" ] && command -v xclip >/dev/null 2>&1; then
+  xclip -selection clipboard -in 2>/dev/null || true
+elif [ -n "${DISPLAY:-}" ] && command -v xsel >/dev/null 2>&1; then
+  xsel --clipboard --input 2>/dev/null || true
+else
+  cat >/dev/null
+fi

@@ -1,0 +1,11 @@
+scratchpad/
+*.bak
+
+# per-box overrides (never committed — see configs/config.local.example.toml)
+config.local.toml
+routing.local.md
+agent-integrations.local.md
+
+# pass-env reference maps are local metadata; actual decrypted values never belong here.
+.pass-env
+*.pass-env

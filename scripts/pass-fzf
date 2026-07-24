@@ -1,0 +1,74 @@
+#!/usr/bin/env sh
+# Fuzzy-select a pass entry name without decrypting it inside the picker.
+set -eu
+
+mode=name
+case "${1:-}" in
+  "") ;;
+  --clip|-c) mode=clip ;;
+  --help|-h)
+    printf 'usage: pass-fzf [--clip]\n\nWithout options, print only the selected entry name.\n--clip decrypts its first line directly to the native clipboard.\n'
+    exit 0
+    ;;
+  *) printf 'pass-fzf: unknown option: %s\n' "$1" >&2; exit 2 ;;
+esac
+
+command -v fzf >/dev/null 2>&1 || {
+  printf 'pass-fzf: fzf is required\n' >&2
+  exit 1
+}
+command -v pass >/dev/null 2>&1 || {
+  printf 'pass-fzf: pass is required\n' >&2
+  exit 1
+}
+# stdout may intentionally be captured by `$(pass-fzf)`, but the picker UI must still
+# have an interactive terminal on stderr.
+[ -t 2 ] || {
+  printf 'pass-fzf: an interactive terminal is required\n' >&2
+  exit 1
+}
+
+store=${PASSWORD_STORE_DIR:-"$HOME/.password-store"}
+[ -d "$store" ] || {
+  printf 'pass-fzf: password store not found: %s\n' "$store" >&2
+  exit 1
+}
+
+entry=$(
+  find "$store" -type f -name '*.gpg' ! -path '*/.git/*' -print |
+    while IFS= read -r path; do
+      relative=${path#"$store"/}
+      printf '%s\n' "${relative%.gpg}"
+    done |
+    LC_ALL=C sort |
+    fzf --prompt='pass > ' --height=40% --layout=reverse --border
+) || exit $?
+
+[ -n "$entry" ] || exit 130
+if [ "$mode" = name ]; then
+  printf '%s\n' "$entry"
+  exit 0
+fi
+
+if [ "$(uname -s)" != Darwin ]; then
+  exec pass show --clip=1 "$entry"
+fi
+
+# Upstream pass clipboard support targets xclip/wl-clipboard. On macOS, mirror its
+# 45-second behavior with pbcopy/pbpaste while keeping plaintext out of argv and stdout.
+command -v pbcopy >/dev/null 2>&1 && command -v pbpaste >/dev/null 2>&1 || {
+  printf 'pass-fzf: pbcopy and pbpaste are required for --clip on macOS\n' >&2
+  exit 1
+}
+decrypted=$(pass show "$entry") || exit $?
+secret=$(printf '%s\n' "$decrypted" | sed -n '1p')
+unset decrypted
+previous=$(pbpaste 2>/dev/null || true)
+printf '%s' "$secret" | pbcopy
+(
+  sleep "${PASSWORD_STORE_CLIP_TIME:-45}"
+  current=$(pbpaste 2>/dev/null || true)
+  if [ "$current" = "$secret" ]; then printf '%s' "$previous" | pbcopy; fi
+) >/dev/null 2>&1 &
+printf 'Copied %s to the clipboard; previous contents restore after %ss.\n' \
+  "$entry" "${PASSWORD_STORE_CLIP_TIME:-45}" >&2
