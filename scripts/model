@@ -9,18 +9,34 @@
 set -euo pipefail
 label="local-model"; plist="$HOME/Library/LaunchAgents/$label.plist"; uid="$(id -u)"
 mdir="$HOME/.local/share/models"; active="$mdir/local.gguf"
+self="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")"
+dotfiles="$(cd "$(dirname "$self")/.." && pwd)"
 restart(){ launchctl kickstart -k "gui/$uid/$label" 2>/dev/null || { [ -f "$plist" ] && launchctl bootstrap "gui/$uid" "$plist" 2>/dev/null; }; }
+healthy(){ curl -s -m 2 http://127.0.0.1:18080/health 2>/dev/null | grep -q '"status":"ok"'; }
+# Cold load is ~18s (warm ~3s), so wait before re-rendering or the banner records a false DOWN.
+wait_healthy(){ for _ in $(seq 1 40); do healthy && return 0; sleep 1; done; return 1; }
+# bootout returns before the process actually exits, so the port can still answer.
+wait_down(){ for _ in $(seq 1 20); do healthy || return 0; sleep 0.5; done; return 1; }
+# routing.local.md is the same renderer setup.sh uses; it bakes in liveness, so it goes
+# stale the moment the daemon flips. Re-render on every state change.
+sync_routing(){ [ -f "$dotfiles/routing.local.md" ] || return 0
+  bash "$dotfiles/hooks/routing-activate.sh" > "$dotfiles/routing.local.md.tmp" \
+    && mv "$dotfiles/routing.local.md.tmp" "$dotfiles/routing.local.md" \
+    || rm -f "$dotfiles/routing.local.md.tmp"; }
 
 case "${1:-status}" in
   on)
     [ -f "$plist" ] || { echo "no daemon plist — run setup.sh"; exit 1; }
     launchctl bootstrap "gui/$uid" "$plist" 2>/dev/null || launchctl kickstart "gui/$uid/$label"
-    echo "model: ON (:8080)" ;;
+    if wait_healthy; then echo "model: ON (:18080)"; else echo "model: started but /health not answering after 40s"; fi
+    sync_routing ;;
   off)
-    launchctl bootout "gui/$uid/$label" 2>/dev/null && echo "model: OFF" || echo "model: already off" ;;
+    launchctl bootout "gui/$uid/$label" 2>/dev/null && echo "model: OFF" || echo "model: already off"
+    wait_down || echo "warning: :18080 still answering"
+    sync_routing ;;
   status)
     cur=$(readlink "$active" 2>/dev/null | xargs -r basename 2>/dev/null); cur=${cur:-none}
-    curl -s -m 3 http://127.0.0.1:8080/health 2>/dev/null | grep -q '"status":"ok"' && srv="serving :8080" || srv="stopped/loading"
+    curl -s -m 3 http://127.0.0.1:18080/health 2>/dev/null | grep -q '"status":"ok"' && srv="serving :18080" || srv="stopped/loading"
     echo "active: $cur"; echo "daemon: $srv" ;;
   list)
     act=$(readlink "$active" 2>/dev/null | xargs -r basename 2>/dev/null)
@@ -34,7 +50,9 @@ case "${1:-status}" in
     f="${2:?usage: model use <file.gguf>}"
     [ -f "$mdir/$f" ] || { echo "not in registry: $f  (run: model list)"; exit 1; }
     ln -sfn "$mdir/$f" "$active"; restart
-    echo "model: switched to $f (daemon restarting)" ;;
+    wait_healthy || echo "warning: /health not answering after 40s"
+    sync_routing
+    echo "model: switched to $f" ;;
   pull)
     repo="${2:?usage: model pull <hf-repo> <file.gguf>}"; file="${3:?usage: model pull <hf-repo> <file.gguf>}"
     url="https://huggingface.co/$repo/resolve/main/$file"; mkdir -p "$mdir"

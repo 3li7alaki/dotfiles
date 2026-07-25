@@ -20,7 +20,7 @@ HANDOFF_WARN=${CCSL_HANDOFF_WARN:-40}   # yellow at/above
 HANDOFF_HARD=${CCSL_HANDOFF_HARD:-50}   # red + ⚑ at/above — "get a handoff prompt now"
 CACHE_SECS=${CCSL_CACHE_SECS:-5}
 MODELS_LINK="${CCSL_MODELS_LINK:-$HOME/.local/share/models/local.gguf}"
-LOCAL_HEALTH="${CCSL_LOCAL_HEALTH:-http://127.0.0.1:8080/health}"
+LOCAL_HEALTH="${CCSL_LOCAL_HEALTH:-http://127.0.0.1:18080/health}"
 SETTINGS="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"
 
 # Bright ANSI — the 90m-dim look was unreadable; reserve dim only for separators.
@@ -70,7 +70,8 @@ if stale; then
     [ -n "$(git -C "$CWD" status --porcelain 2>/dev/null | head -1)" ] && DIRTY="*"
   fi
   UP=0
-  [ "$(curl -s -m 0.2 -o /dev/null -w '%{http_code}' "$LOCAL_HEALTH" 2>/dev/null)" = "200" ] && UP=1
+  # Match the payload, not the status code: another service on the same port answers 200 too.
+  curl -s -m 0.2 "$LOCAL_HEALTH" 2>/dev/null | grep -q '"status":"ok"' && UP=1
   printf '%s\n%s\n%s\n' "$BR" "$DIRTY" "$UP" > "$CACHE"   # line-per-field: tab would collapse empties
 fi
 { IFS= read -r BR; IFS= read -r DIRTY; IFS= read -r UP; } < "$CACHE" 2>/dev/null

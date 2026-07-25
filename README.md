@@ -74,7 +74,7 @@ use `scripts/render-readme-catalog.py --check` to catch drift.
 | Package | Target | Requires | Default | Purpose |
 | --- | --- | --- | --- | --- |
 | [tmux](https://github.com/tmux/tmux) | HOME | stow, tmux | on | Portable tmux defaults and a macOS/Linux clipboard bridge |
-| [raycast](https://raycast.com) | HOME | stow | on | Raycast custom AI provider — points Raycast at the local llama-server (:8080) |
+| [raycast](https://raycast.com) | HOME | stow | on | Raycast custom AI provider — points Raycast at the local llama-server (:18080) |
 
 ### Skills and MCP integrations
 

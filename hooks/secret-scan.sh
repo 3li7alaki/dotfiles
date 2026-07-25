@@ -5,7 +5,7 @@
 #   gitleaks (regex)    -> BLOCKS. Near-zero false positives on known key formats, so a
 #                          hit is almost always a real leak. A deterministic gate earns
 #                          the right to hard-stop.
-#   local model (:8080) -> WARNS. Catches the long tail regex structurally cannot see: a
+#   local model (:18080) -> WARNS. Catches the long tail regex structurally cannot see: a
 #                          key concatenated across two variables, a base64'd token, a
 #                          credential sitting in a comment. Recall is far better than
 #                          regex (~84% vs ~37% in benchmarks) but it DOES false-positive,
@@ -20,7 +20,7 @@
 
 set -uo pipefail
 
-ENDPOINT="${LOCAL_MODEL_ENDPOINT:-http://127.0.0.1:8080/v1}"
+ENDPOINT="${LOCAL_MODEL_ENDPOINT:-http://127.0.0.1:18080/v1}"
 
 payload=$(cat)
 command_line=$(printf '%s' "$payload" | python3 -c 'import json,sys

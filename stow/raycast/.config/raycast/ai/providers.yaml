@@ -1,7 +1,7 @@
 providers:
   - id: llamacpp
     name: llama.cpp (local)
-    base_url: http://127.0.0.1:8080/v1   # llama-server; Raycast appends /chat/completions + /models
+    base_url: http://127.0.0.1:18080/v1   # llama-server; Raycast appends /chat/completions + /models
     api_keys:
       default: dummy-not-used            # llama-server has no auth; Raycast just wants a key field
     models:

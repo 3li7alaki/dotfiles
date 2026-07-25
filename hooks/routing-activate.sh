@@ -36,9 +36,13 @@ for k in ("heavy", "bulk", "mechanical", "ui", "review", "private", "verify"):
 active = [name for name, cfg in e.items() if cfg.get("active")]
 # Liveness: an engine with requires_endpoint is only usable if that endpoint answers now.
 # localhost-refused returns instantly, so this adds no latency when the local model is off.
+# Assert the payload, not just a 200: another local service on the same port (a dev server
+# bound to the IPv6 wildcard, say) will happily answer /health and masquerade as the model.
 import urllib.request
-def _up(url, t=0.5):
-    try: urllib.request.urlopen(url, timeout=t); return True
+def _up(url, t=2.0):
+    try:
+        with urllib.request.urlopen(url, timeout=t) as r:
+            return b'"status":"ok"' in r.read(256).replace(b", ", b",")
     except Exception: return False
 down = []
 for name in list(active):
