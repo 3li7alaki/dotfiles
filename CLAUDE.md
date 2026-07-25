@@ -71,3 +71,4 @@ Each tool below is loaded here and toggled in `config.toml`. Delete a line to un
 
 @tools/RTK.md
 @tools/mint.md
+@tools/blueprint.md

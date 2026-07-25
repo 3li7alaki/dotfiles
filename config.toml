@@ -248,6 +248,13 @@ install = "curl -fsSL https://raw.githubusercontent.com/3li7alaki/mint/main/inst
 homepage = "https://github.com/3li7alaki/mint"
 desc    = "Atomic completion ledger with snapshot-bound receipts"
 
+[tools.blueprint]
+enabled = true
+type    = "binary"           # same rolling-latest release shape as mint
+install = "curl -fsSL https://raw.githubusercontent.com/3li7alaki/blueprint/main/install.sh | sh"
+homepage = "https://github.com/3li7alaki/blueprint"
+desc    = "Spec layer above the code: grills the idea, then gates code against the answers"
+
 [tools.codex]
 enabled = true               # global default; a box w/o GPT access sets false in config.local.toml
 type    = "binary"           # already on PATH; presence-checked only
