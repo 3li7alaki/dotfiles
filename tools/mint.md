@@ -1,9 +1,9 @@
-# mint — atomic completion ledger
+# mint: atomic completion ledger
 
 > Drivers organize and execute work. mint records why an atomic unit is allowed to be called done.
 
 mint is a CLI on PATH, not a skill or plugin. `Skill("mint")` resolves to a thin dispatcher
-that just points back here — you never *run* mint as a skill; drive the CLI via Bash directly.
+that just points back here. You never *run* mint as a skill; drive the CLI via Bash directly.
 This document is the whole contract.
 
 Use mint for an atomic claim with a goal, explicit scope, observable acceptance criteria, and
