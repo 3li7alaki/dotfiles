@@ -64,6 +64,7 @@ use `scripts/render-readme-catalog.py --check` to catch drift.
 | [aria2](https://aria2.github.io/) | CLI | Linux / macOS | on | Multi-connection downloader — fast HF model pulls (curl single-stream throttles) |
 | [rtk](https://github.com/rtk-ai/rtk) | CLI | Linux / macOS | on | Rust Token Killer — token-optimizing CLI proxy |
 | [mint](https://github.com/3li7alaki/mint) | CLI | Linux / macOS | on | Atomic completion ledger with snapshot-bound receipts |
+| [blueprint](https://github.com/3li7alaki/blueprint) | CLI | Linux / macOS | on | Spec layer above the code: grills the idea, then gates code against the answers |
 | [codex](https://github.com/openai/codex) | CLI | Linux / macOS | on | OpenAI Codex CLI — GPT-5.6 worker |
 | [opencode](https://github.com/anomalyco/opencode) | CLI | Linux / macOS | on | OpenCode — headless agent runner; hosts GLM + the local model via opencode.json |
 | [llama-server](https://github.com/ggml-org/llama.cpp) | CLI | darwin | on | llama.cpp server — local OpenAI endpoint; wins on ops, MTP, and M5 tensor-API prefill |
@@ -85,6 +86,7 @@ use `scripts/render-readme-catalog.py --check` to catch drift.
 | [impeccable](https://github.com/pbakaus/impeccable) | Skill bundle | on | Frontend design + UX review — anti-slop design language (impeccable.style) |
 | [pinchtab](https://github.com/pinchtab/pinchtab) | Repo skill | on | Browser automation via PinchTab |
 | [slay](https://github.com/debuglebowski/slayzone) | Shared agent skill | on | Runtime-discovered Slay CLI guidance shared by Claude and Codex |
+| [mint](https://github.com/3li7alaki/mint) | Shared agent skill | on | Dispatcher so Skill(mint) resolves to CLI guidance instead of erroring |
 | [ui-ux-pro-max](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill) | Claude plugin | on | Design intelligence — styles, palettes, font pairings, UX guidelines |
 | skillless | Skill bundle | on | Skill finder — discovers/installs relevant skills on demand (/discover, /plans) |
 
