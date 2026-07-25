@@ -441,15 +441,15 @@ verify_all() {
         name=$(cfg "skills.$s.mcp"); bin=$(cfg "skills.$s.bin"); bin=$(resolve "$bin")
         [ -x "$bin" ] && ok "mcp binary $bin" || bad "mcp binary missing: $bin"
         python3 -c "import json;d=json.load(open('$CLAUDE_DIR/.mcp.json'));exit(0 if '$name' in d.get('mcpServers',{}) else 1)" 2>/dev/null \
-          && ok "mcp $name registered" || bad "mcp $name not in .mcp.json"
-        check=$(cfg "skills.$s.verify_command")
-        [ -z "$check" ] || { eval "$check" && ok "$s configured" || bad "$s configuration check failed"; } ;;
+          && ok "mcp $name registered" || bad "mcp $name not in .mcp.json" ;;
       symlink)
         for provider in $(skill_providers "$s"); do
           link=$(skill_link_path "$provider" "$s") || { bad "$s has unsupported provider: $provider"; continue; }
           [ -e "$link" ] && ok "skill link $s ($provider)" || bad "skill link broken/missing: $link"
         done ;;
     esac
+    check=$(cfg "skills.$s.verify_command")
+    [ -z "$check" ] || { eval "$check" && ok "$s configured" || bad "$s configuration check failed"; }
   done
   for h in $(section_keys hooks); do
     [ "$(cfg "hooks.$h.enabled")" = "true" ] || continue
@@ -712,11 +712,6 @@ for s in $(section_keys skills); do
         else say "$s: ⚠ binary missing ($bin) and no install command"; fi
       fi
       run "mcp_set '$name' '$bin' '$enabled'"
-      configure=$(cfg "skills.$s.configure")
-      if [ "$enabled" = "true" ] && [ -n "$configure" ]; then
-        run "$configure"
-        say "$s: runtime configuration applied"
-      fi
       say "$s: mcp $name -> enabled=$enabled" ;;
     symlink)
       tgt=$(resolve "$(cfg "skills.$s.target")")
@@ -737,6 +732,12 @@ for s in $(section_keys skills); do
       fi ;;
     *) say "$s: unknown type '$type' — skip" ;;
   esac
+  # Runtime tuning, applied after the skill is wired regardless of its type.
+  configure=$(cfg "skills.$s.configure")
+  if [ "$enabled" = "true" ] && [ -n "$configure" ]; then
+    run "$configure"
+    say "$s: runtime configuration applied"
+  fi
 done
 
 # 3b. Hooks — `command` entries wire on their event; `script` entries inject every turn.

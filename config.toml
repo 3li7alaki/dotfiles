@@ -369,6 +369,8 @@ desc    = "Frontend design + UX review — anti-slop design language (impeccable
 enabled = true
 type    = "symlink"          # owned by dotfiles: lives in dotfiles/skills/, linked out
 target  = "DOTFILES/skills/pinchtab"   # DOTFILES resolved by setup.sh
+configure = "bash $DOTFILES/scripts/tune-pinchtab.sh"   # stock config pins cores at idle; see script header
+verify_command = "pinchtab config get multiInstance.strategy 2>/dev/null | grep -qx simple"
 homepage = "https://github.com/pinchtab/pinchtab"
 desc    = "Browser automation via PinchTab"
 
