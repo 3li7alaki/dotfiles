@@ -1,5 +1,9 @@
 {
   "$schema": "https://opencode.ai/config.json",
+  "plugin": [
+    "@dietrichgebert/ponytail",
+    "./plugins/caveman/plugin.js"
+  ],
   "provider": {
     "glm": {
       "npm": "@ai-sdk/openai-compatible",

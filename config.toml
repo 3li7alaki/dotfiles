@@ -335,6 +335,11 @@ enabled = true
 type    = "plugin"           # Claude plugin + a statusline hook (managed together)
 plugin  = "ponytail@ponytail"
 marketplace = "DietrichGebert/ponytail"
+# `plugin` covers Claude Code only. `configure` runs every setup and carries the
+# same behavior to the other harnesses on the box (opencode, Codex; T3 Code
+# inherits from whichever of those it drives).
+configure = "bash $DOTFILES/scripts/install-ponytail-extras.sh"
+verify_command = "! command -v opencode >/dev/null 2>&1 || grep -q '@dietrichgebert/ponytail' \"$HOME/.config/opencode/opencode.json\""
 homepage = "https://github.com/DietrichGebert/ponytail"
 desc    = "Lazy-senior-dev discipline — the laziest solution that works"
 
@@ -343,6 +348,8 @@ enabled = true
 type    = "plugin"           # pairs with ponytail: ponytail cuts code, caveman cuts prose
 plugin  = "caveman@caveman"
 marketplace = "JuliusBrussee/caveman"
+configure = "bash $DOTFILES/scripts/install-caveman-extras.sh"
+verify_command = "! command -v opencode >/dev/null 2>&1 || test -f \"$HOME/.config/opencode/plugins/caveman/plugin.js\""
 homepage = "https://github.com/JuliusBrussee/caveman"
 desc    = "Terse caveman-speak — ~65% fewer output tokens, code/commands byte-exact"
 

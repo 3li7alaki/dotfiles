@@ -7,6 +7,7 @@ set -euo pipefail
 DOTFILES="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CLAUDE_DIR="$HOME/.claude"
 CODEX_DIR="$HOME/.codex"
+OPENCODE_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/opencode"
 CONFIG="$DOTFILES/config.toml"
 XDG_DATA="${XDG_DATA_HOME:-$HOME/.local/share}"
 XDG_STATE="${XDG_STATE_HOME:-$HOME/.local/state}"
@@ -479,12 +480,14 @@ sys.exit(0 if found else 1)" 2>/dev/null \
     && ok "global CLAUDE.md points at hub" || bad "global CLAUDE.md not pointing at hub"
   [ -s "$DOTFILES/agent-integrations.local.md" ] \
     && ok "agent integrations rendered" || bad "agent-integrations.local.md missing/empty — run setup"
-  if agent_context_active; then
-    grep -qF '<!-- >>> dotfiles:agent-integrations >>> -->' "$CODEX_DIR/AGENTS.md" 2>/dev/null \
-      && ok "global Codex AGENTS.md has integrations" || bad "global Codex AGENTS.md missing integration block"
-  elif grep -qF '<!-- >>> dotfiles:agent-integrations >>> -->' "$CODEX_DIR/AGENTS.md" 2>/dev/null; then
-    bad "global Codex AGENTS.md has disabled integration block"
-  fi
+  for agents_md in "$CODEX_DIR/AGENTS.md" "$OPENCODE_DIR/AGENTS.md"; do
+    if agent_context_active; then
+      grep -qF '<!-- >>> dotfiles:agent-integrations >>> -->' "$agents_md" 2>/dev/null \
+        && ok "$agents_md has integrations" || bad "$agents_md missing integration block"
+    elif grep -qF '<!-- >>> dotfiles:agent-integrations >>> -->' "$agents_md" 2>/dev/null; then
+      bad "$agents_md has disabled integration block"
+    fi
+  done
   [ -f "$DOTFILES/config.local.toml" ] && ok "config.local.toml overlay present" \
     || say "· no config.local.toml (base defaults apply — copy configs/config.local.example.toml to override per-box)"
   [ -s "$DOTFILES/routing.local.md" ] && ok "routing.local.md rendered" || bad "routing.local.md missing/empty — run setup"
@@ -536,19 +539,23 @@ for a in $(section_keys apps); do
 done
 
 # 2. Render cross-app agent guidance and expose the same effective configuration to
-# Claude and Codex. Claude supports @ imports; Codex receives a marker-owned block so
-# existing global instructions remain intact.
+# Claude, Codex and opencode. Claude supports @ imports; Codex and opencode each read
+# a global AGENTS.md, so they receive a marker-owned block and any instructions the
+# user (or a plugin installer) authored around it stay intact.
 head "agent integrations"
 if $DRY; then
   say "would: render merged integrations -> agent-integrations.local.md"
-  if agent_context_active; then say "would: update managed block in ~/.codex/AGENTS.md"
-  else say "would: remove managed block from ~/.codex/AGENTS.md"; fi
+  if agent_context_active; then say "would: update managed block in ~/.codex/AGENTS.md and $OPENCODE_DIR/AGENTS.md"
+  else say "would: remove managed block from ~/.codex/AGENTS.md and $OPENCODE_DIR/AGENTS.md"; fi
 else
   "$DOTFILES/scripts/render-agent-integrations.py" > "$DOTFILES/agent-integrations.local.md"
   if agent_context_active; then enabled=true; else enabled=false; fi
   markdown_block_set "$CODEX_DIR/AGENTS.md" agent-integrations \
     "$DOTFILES/agent-integrations.local.md" "$enabled"
-  say "rendered; Codex managed block -> enabled=$enabled"
+  mkdir -p "$OPENCODE_DIR"
+  markdown_block_set "$OPENCODE_DIR/AGENTS.md" agent-integrations \
+    "$DOTFILES/agent-integrations.local.md" "$enabled"
+  say "rendered; Codex + opencode managed blocks -> enabled=$enabled"
 fi
 
 # 2b. Wire global CLAUDE.md -> this hub (idempotent single line).
