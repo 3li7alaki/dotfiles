@@ -131,6 +131,28 @@ edits, never redirect onto the input file. Do not pass secrets through `--arg` c
 arguments or print sensitive JSON fields.
 """
 
+[tools.fribidi]
+enabled = true
+type    = "binary"
+install = "bash $DOTFILES/scripts/install-fribidi.sh"
+verify_command = "fribidi --version >/dev/null 2>&1 && command -v bidi-shell-init >/dev/null 2>&1"
+shell_command = "bidi-shell-init"
+shells  = ["bash", "zsh", "fish"]
+homepage = "https://github.com/fribidi/fribidi"
+desc    = "Arabic/Hebrew in a terminal with no bidi engine: `bidi` reorders and shapes RTL text"
+agent_guidance = """
+Ghostty, kitty, and Alacritty implement no Unicode bidi algorithm, so Arabic and Hebrew
+arrive in logical order and read reversed on screen. Pipe such text through `bidi`
+(`bidi file.txt`, `cmd | bidi`) for visual order plus Arabic joining forms. Add `--ltr` or
+`--rtl` to pin the paragraph base direction when auto-detection guesses wrong.
+
+Only ever feed it plain text. `bidi` treats ANSI escape sequences as ordinary characters and
+reorders them into garbage, so strip color first (`git --no-pager diff --no-color`, `ls`
+without `--color`). Its output holds Arabic presentation forms (U+FE70..U+FEFF), so it is
+for display only: never write it back to a file, a commit message, or a diff, and never
+match against it. See docs/arabic-terminal.md for the terminal-side options.
+"""
+
 [tools.fzf]
 enabled = true
 type    = "binary"

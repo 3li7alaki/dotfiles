@@ -1,0 +1,22 @@
+#!/usr/bin/env sh
+# Emit the `bidi` filter: reorder logical-order RTL text into visual order and shape Arabic,
+# so terminals with no bidi engine of their own (Ghostty, kitty, Alacritty) render it readably.
+set -eu
+
+shell=${2:-${1:-}}
+case "$shell" in
+  bash|zsh)
+    # `bidi file...` reads files, `... | bidi` reads stdin. Extra flags pass through to fribidi
+    # (--ltr / --rtl to force the paragraph base direction, --nopad is already applied).
+    printf '%s\n' 'bidi() { fribidi --nopad "$@"; }'
+    ;;
+  fish)
+    printf '%s\n' 'function bidi --description "reorder + shape RTL text for a non-bidi terminal"' \
+                  '    fribidi --nopad $argv' \
+                  'end'
+    ;;
+  *)
+    printf 'usage: bidi-shell-init init <bash|zsh|fish>\n' >&2
+    exit 2
+    ;;
+esac

@@ -55,6 +55,7 @@ use `scripts/render-readme-catalog.py --check` to catch drift.
 | [pass](https://www.passwordstore.org/) | CLI | Linux / macOS | on | GPG-encrypted local secret store with a no-plaintext-file environment launcher |
 | [github-cli](https://github.com/cli/cli) | CLI | Linux / macOS | on | Official GitHub CLI for pull requests, checks, issues, releases, and API access |
 | [jq](https://github.com/jqlang/jq) | CLI | Linux / macOS | on | Lightweight structural JSON querying, validation, filtering, and transformation |
+| [fribidi](https://github.com/fribidi/fribidi) | CLI | Linux / macOS | on | Arabic/Hebrew in a terminal with no bidi engine: `bidi` reorders and shapes RTL text |
 | [fzf](https://github.com/junegunn/fzf) | CLI | Linux / macOS | on | Interactive fuzzy finder with shell history, path selection, and completion bindings |
 | [fd](https://github.com/sharkdp/fd) | CLI | Linux / macOS | on | Fast, user-friendly path search with Git-aware filtering and concise syntax |
 | [ripgrep](https://github.com/BurntSushi/ripgrep) | CLI | Linux / macOS | on | Fast recursive code search with Git-aware filtering and useful defaults |
