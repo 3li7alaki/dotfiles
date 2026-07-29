@@ -57,6 +57,12 @@ Create the directory `0700` and the file `0600` before writing:
 mkdir -p "$dir" && chmod 700 "$dir" && install -m 600 /dev/null "$f"
 ```
 
+If that path is not writable, which happens under a sandboxed run such as
+`codex exec`, fall back to `$TMPDIR/handoff/<repo-basename>/` with the same modes and
+name, and say plainly in your report that it was staged there and why. Do not silently
+pick a different location, and do not give up on writing the file: an unwritable
+preferred path is not a reason to lose the handoff.
+
 Every section below is REQUIRED. If a section is genuinely empty, write
 `none known` or `not verified`. Never drop one: a section you forgot and a section
 with nothing in it look identical to the reader, and one of them is a lie.
@@ -163,13 +169,22 @@ pbcopy < "$f" 2>/dev/null || wl-copy < "$f" 2>/dev/null \
   || echo "clipboard unavailable"
 ```
 
-Report exactly this and nothing more:
+Report exactly this and nothing more, naming the reset that belongs to the surface
+you are actually running on:
 
     handoff: <absolute path>
     clipboard: yes | no
 
-    Read it before you clear. /clear leaves this session on disk and
-    `claude --resume` brings it back, but the fresh session only gets this file.
+    Read it before you reset. <reset line>
+
+Reset line, by surface:
+
+- Claude Code: "/clear leaves this session on disk and `claude --resume` brings it
+  back, but the fresh session only gets this file."
+- Codex, opencode, or anything else: "start a new session and open with this file."
+
+Do not tell a Codex user to run `/clear`. If you cannot tell which surface you are on,
+use the generic line.
 
 ## Rules
 

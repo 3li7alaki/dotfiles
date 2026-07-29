@@ -424,12 +424,12 @@ desc    = "Dispatcher so Skill(mint) resolves to CLI guidance instead of errorin
 # harness, or a fresh box) can act on without asking what anything meant. Deliberately
 # NOT a replacement for /compact: the file is authored, reviewable and deterministic,
 # whereas a compaction summary is none of those. Pairs with hooks.handoff-checkpoint.
-# `providers` stays claude-only until the Codex path is actually tested.
+# The Stop hook is Claude-only, so on Codex this is the manual `/handoff` path.
 [skills.handoff]
 enabled = true
 type    = "symlink"
 target  = "DOTFILES/skills/handoff"
-providers = ["claude"]
+providers = ["claude", "codex"]
 desc    = "Continuation prompt for a fresh session — file + clipboard, refs not copies"
 
 # ── Hooks (two shapes, both idempotent, both toggled here) ────────────────────
@@ -484,10 +484,11 @@ command = "DOTFILES/hooks/handoff-checkpoint.sh"
 desc    = "Suggests a handoff at a seam once conversation growth crosses the band"
 
 # One-line Claude Code status bar, tuned to this box. Segments (priority high→low, wraps to
-# more rows when $COLUMNS is narrow — nothing dropped): ctx-bar% · 5h/7d rate limits ·
+# more rows when $COLUMNS is narrow — nothing dropped): ctx-tokens · 5h/7d rate limits ·
 # [model·1M] · cwd branch*⑂wt · effort⚡ · ●local-model · 🎙voice · 🖥remote · session. The
-# context bar bands on the HANDOFF threshold (~45%), not the 90% compact cliff — this box
-# never compacts; voice/remote show only when active.
+# context bar reads in ABSOLUTE TOKENS against the handoff ceiling, so it agrees with
+# hooks/handoff-checkpoint.sh instead of drifting with the window size; voice/remote show
+# only when active.
 [statusline]
 enabled = true
 script  = "DOTFILES/scripts/cc-statusline.sh"

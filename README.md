@@ -88,7 +88,7 @@ use `scripts/render-readme-catalog.py --check` to catch drift.
 | [pinchtab](https://github.com/pinchtab/pinchtab) | Repo skill | on | Browser automation via PinchTab |
 | [slay](https://github.com/debuglebowski/slayzone) | Shared agent skill | on | Runtime-discovered Slay CLI guidance shared by Claude and Codex |
 | [mint](https://github.com/3li7alaki/mint) | Shared agent skill | on | Dispatcher so Skill(mint) resolves to CLI guidance instead of erroring |
-| handoff | Repo skill | on | Continuation prompt for a fresh session — file + clipboard, refs not copies |
+| handoff | Shared agent skill | on | Continuation prompt for a fresh session — file + clipboard, refs not copies |
 | [ui-ux-pro-max](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill) | Claude plugin | on | Design intelligence — styles, palettes, font pairings, UX guidelines |
 | skillless | Skill bundle | on | Skill finder — discovers/installs relevant skills on demand (/discover, /plans) |
 
