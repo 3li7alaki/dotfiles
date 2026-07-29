@@ -88,6 +88,7 @@ use `scripts/render-readme-catalog.py --check` to catch drift.
 | [pinchtab](https://github.com/pinchtab/pinchtab) | Repo skill | on | Browser automation via PinchTab |
 | [slay](https://github.com/debuglebowski/slayzone) | Shared agent skill | on | Runtime-discovered Slay CLI guidance shared by Claude and Codex |
 | [mint](https://github.com/3li7alaki/mint) | Shared agent skill | on | Dispatcher so Skill(mint) resolves to CLI guidance instead of erroring |
+| handoff | Repo skill | on | Continuation prompt for a fresh session — file + clipboard, refs not copies |
 | [ui-ux-pro-max](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill) | Claude plugin | on | Design intelligence — styles, palettes, font pairings, UX guidelines |
 | skillless | Skill bundle | on | Skill finder — discovers/installs relevant skills on demand (/discover, /plans) |
 
@@ -117,6 +118,7 @@ use `scripts/render-readme-catalog.py --check` to catch drift.
 | routing | Claude hook | on | Injects model routing — dispatch bulk→codex, mechanical→glm, etc. |
 | cbm-gate | Claude hook | on | Nudges code discovery toward the codebase graph — blocks once per session, then allows |
 | secret-scan | Claude hook | on | Pre-commit secret scan — gitleaks blocks, the local model warns on the long tail |
+| handoff-checkpoint | Claude hook | on | Suggests a handoff at a seam once conversation growth crosses the band |
 | local-model | User daemon (darwin) | on | Local model endpoint (llama.cpp) — idle-unloads so it costs no RAM at rest |
 | revise-claude-md | Scheduled task | on | Weekly CLAUDE.md hygiene across ~/Projects repos |
 | update-tools | Scheduled task | on | Weekly tool auto-update (latest binaries) |

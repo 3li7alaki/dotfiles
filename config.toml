@@ -420,6 +420,18 @@ providers = ["claude", "codex"]
 homepage = "https://github.com/3li7alaki/mint"
 desc    = "Dispatcher so Skill(mint) resolves to CLI guidance instead of erroring"
 
+# Session continuity. Writes a continuation prompt a fresh session (or a fresh
+# harness, or a fresh box) can act on without asking what anything meant. Deliberately
+# NOT a replacement for /compact: the file is authored, reviewable and deterministic,
+# whereas a compaction summary is none of those. Pairs with hooks.handoff-checkpoint.
+# `providers` stays claude-only until the Codex path is actually tested.
+[skills.handoff]
+enabled = true
+type    = "symlink"
+target  = "DOTFILES/skills/handoff"
+providers = ["claude"]
+desc    = "Continuation prompt for a fresh session — file + clipboard, refs not copies"
+
 # ── Hooks (two shapes, both idempotent, both toggled here) ────────────────────
 # `script`  → injector: SessionStart + UserPromptSubmit (ponytail pattern, never blocks)
 # `command` → event hook: wired on `event` (+ optional `matcher`)
@@ -458,6 +470,18 @@ event   = "PreToolUse"
 matcher = "Bash"
 command = "DOTFILES/hooks/secret-scan.sh"
 desc    = "Pre-commit secret scan — gitleaks blocks, the local model warns on the long tail"
+
+# Nudges for a handoff once the session has accumulated enough conversation to be worth
+# checkpointing. Fires on Stop, so never mid-tool-call. Thresholds are ABSOLUTE tokens of
+# growth above this session's measured baseline, never a percentage of the window: 150k of
+# conversation is 15% of a 1M window and 75% of a 200k one for identical history, so the
+# percentage is not a unit of anything. Codex CLI and OpenCode both trigger on absolute
+# tokens too. Knobs (and the reasoning) live at the top of the script. Never blocks.
+[hooks.handoff-checkpoint]
+enabled = true
+event   = "Stop"
+command = "DOTFILES/hooks/handoff-checkpoint.sh"
+desc    = "Suggests a handoff at a seam once conversation growth crosses the band"
 
 # One-line Claude Code status bar, tuned to this box. Segments (priority high→low, wraps to
 # more rows when $COLUMNS is narrow — nothing dropped): ctx-bar% · 5h/7d rate limits ·
