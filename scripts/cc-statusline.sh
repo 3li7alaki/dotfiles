@@ -6,8 +6,9 @@
 #   ctxbar% · 5h/7d · [model·1M] · cwd branch*⑂wt · effort⚡ · ●local · 🎙voice · 🖥remote · session
 #
 # Design notes:
-#   - ctx bar bands on the HANDOFF threshold (~45%), not the 90% compact cliff:
-#     this user never compacts, they ask for a handoff prompt around 40-50%.
+#   - ctx bar is ABSOLUTE TOKENS against the handoff ceiling, not a percentage of
+#     the window, and it flags whichever of the two constraints bites first. It
+#     agrees with hooks/handoff-checkpoint.sh by construction.
 #   - git + local-model health probed at most once / CACHE_SECS, keyed by
 #     session_id (stable per session — $$ would defeat the cache, see docs).
 #   - local model up/down is NOT in the CC JSON; probed via llama-server /health.
@@ -16,8 +17,16 @@
 # ponytail: fixed 5-char bar + right-first truncation. If a segment needs its own
 # width logic, add it then — not before.
 
-HANDOFF_WARN=${CCSL_HANDOFF_WARN:-40}   # yellow at/above
-HANDOFF_HARD=${CCSL_HANDOFF_HARD:-50}   # red + ⚑ at/above — "get a handoff prompt now"
+# The bar measures context against the HANDOFF CEILING, not against the window. A
+# percentage of the window is not a unit of anything: 215k of context is 21% of a 1M
+# window and 107% of a 200k one, for identical accumulated history. Banding on the
+# window meant this bar went yellow at 400k on the 1M box, long after
+# hooks/handoff-checkpoint.sh had already asked for a handoff. Keep CEILING in step
+# with HANDOFF_CEILING in that hook: 50% and 80% of it land on the hook's own
+# checkpoint (~215k) and hard (~365k) totals, so the bar and the nudge agree.
+HANDOFF_CEILING=${CCSL_HANDOFF_CEILING:-450000}   # tokens; mirrors the hook's ceiling
+HANDOFF_WARN=${CCSL_HANDOFF_WARN:-50}   # yellow at/above, percent OF THE CEILING
+HANDOFF_HARD=${CCSL_HANDOFF_HARD:-80}   # red + ⚑ at/above — "get a handoff prompt now"
 CACHE_SECS=${CCSL_CACHE_SECS:-5}
 MODELS_LINK="${CCSL_MODELS_LINK:-$HOME/.local/share/models/local.gguf}"
 LOCAL_HEALTH="${CCSL_LOCAL_HEALTH:-http://127.0.0.1:18080/health}"
@@ -56,6 +65,20 @@ FAST=${F[6]} SESS=${F[7]} WT=${F[8]} SID=${F[9]} CWD=${F[10]}
 PCT=${PCT%.*}; [ -z "$PCT" ] && PCT=0
 SID=${SID//\//_}   # session_id is trusted, but it lands in a /tmp path — belt + braces
 
+# Absolute tokens in context, reconstructed from the two fields Claude Code gives us.
+# TOK is the number the handoff hook talks in, so the bar and the nudge agree; BPCT is
+# only how full the bar draws. BPCT can exceed 100 past the ceiling, which is the point.
+case $CTXSIZE in ''|*[!0-9]*) CTXSIZE=200000 ;; esac
+TOK=$(( CTXSIZE * PCT / 100 ))
+BPCT=$(( TOK * 100 / HANDOFF_CEILING ))
+if [ "$TOK" -ge 1000 ]; then TOKL="$(( TOK / 1000 ))k"; else TOKL="${TOK}"; fi
+
+# Two independent constraints, and the bar shows whichever bites first. Handoff
+# pressure is what binds on a 1M window; the window wall itself is what binds on a
+# 200k one, where 190k is comfortably under the ceiling and still one turn from a
+# forced compaction. Banding on the ceiling alone would have shown that green.
+EPCT=$BPCT; [ "$PCT" -gt "$EPCT" ] && EPCT=$PCT
+
 # ── cached probes (git branch/dirty + local health) ─────────────────────────
 CACHE="${TMPDIR:-/tmp}/ccsl-$SID"
 stale() {
@@ -87,14 +110,16 @@ add() { # add <colored> <plain>
   PLAIN="$np"
 }
 
-# 1. context bar — bands on handoff threshold (~45%), ⚑ at hard. THE number for this box.
-if   [ "$PCT" -ge "$HANDOFF_HARD" ]; then BC=$R; FLAG=" ⚑"
-elif [ "$PCT" -ge "$HANDOFF_WARN" ]; then BC=$Y; FLAG=""
+# 1. context bar — fill and bands are against the handoff ceiling, and the label is
+# absolute tokens rather than a percentage, because tokens are what the handoff hook
+# reports and what the thresholds are actually set in. THE number for this box.
+if   [ "$EPCT" -ge "$HANDOFF_HARD" ]; then BC=$R; FLAG=" ⚑"
+elif [ "$EPCT" -ge "$HANDOFF_WARN" ]; then BC=$Y; FLAG=""
 else BC=$G; FLAG=""; fi
-FILLED=$(( PCT * 5 / 100 )); [ "$FILLED" -gt 5 ] && FILLED=5
+FILLED=$(( EPCT * 5 / 100 )); [ "$FILLED" -gt 5 ] && FILLED=5; [ "$FILLED" -lt 0 ] && FILLED=0
 printf -v F "%${FILLED}s"; printf -v E "%$((5-FILLED))s"
 BAR="${F// /▓}${E// /░}"
-add "${B}${BC}${BAR} ${PCT}%${FLAG}${X}" "$BAR ${PCT}%${FLAG}"
+add "${B}${BC}${BAR} ${TOKL}${FLAG}${X}" "$BAR ${TOKL}${FLAG}"
 
 # 2. rate limits — each window colored by its own pressure (Max subscriber; absent otherwise)
 RL=""; RLP=""
