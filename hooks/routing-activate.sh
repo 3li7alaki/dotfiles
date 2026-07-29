@@ -20,7 +20,7 @@ if os.path.exists(local):
             if isinstance(v, dict) and isinstance(dst.get(k), dict): deep(dst[k], v)
             else: dst[k] = v
     deep(d, tomllib.load(open(local, "rb")))
-r = d.get("routing", {}); e = d.get("engines", {})
+r = d.get("routing", {}); e = d.get("engines", {}); pools = d.get("pools", {})
 labels = {"heavy": "hard / agentic / multi-file coding — the flagship",
           "bulk": "routine clear-spec implementation, migrations",
           "mechanical": "cheap / mechanical edits, data munging (GLM coding plan — spread load)",
@@ -29,8 +29,18 @@ labels = {"heavy": "hard / agentic / multi-file coding — the flagship",
           "private": "data/diff must NOT leave the box (NDA, secrets, client code)",
           "verify": "ASYNC closed-question checks (mint's anti-gaming lens, secret scan)"}
 print("MODEL ROUTING ACTIVE — dispatch by task shape, don't do everything as raw Claude.")
-print("Three flat pools (Claude Max 5x: opus/fable · ChatGPT Pro: sol/terra/luna · GLM coding plan: glm-5.2).")
-print("All flat, ~0 marginal cost: pick on intelligence/taste + spread cap load, not price.\n")
+# Pools come from [pools]: plan size sets THROUGHPUT, so the capacity line for the plan
+# currently on file is the one that tells the agent how freely to spend that pool.
+if pools:
+    print("Flat pools (~0 marginal cost — pick on intelligence/taste + spread cap load, not price):")
+    for name, p in pools.items():
+        plan = p.get("plan", "?")
+        print(f"  {name} [{plan}]: " + ", ".join(p.get("models", [])))
+        note = p.get("capacity", {}).get(plan)
+        if note: print(f"      {note}")
+    print()
+else:
+    print("All flat, ~0 marginal cost: pick on intelligence/taste + spread cap load, not price.\n")
 for k in ("heavy", "bulk", "mechanical", "ui", "review", "private", "verify"):
     if k in r: print(f"- {labels.get(k,k)} -> {r[k]}")
 active = [name for name, cfg in e.items() if cfg.get("active")]

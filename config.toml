@@ -583,12 +583,37 @@ desc     = "Weekly tool auto-update (latest binaries)"
 # accordingly. It's a convention the agent follows, not enforced infra. On a 429,
 # the agent walks `fallback` by hand. Keep it honest: guidance, not automation.
 #
-# Cost model is NOT list price — it's THREE flat-rate subscription pools, all
-# LIMIT-bound with ~0 marginal cost. Claude Max 5x (opus/fable/sonnet), ChatGPT
-# Pro (the GPT-5.6 family: sol/terra/luna), and the GLM Coding Plan (glm-5.2).
+# Cost model is NOT list price — it's flat-rate subscription pools, all LIMIT-bound
+# with ~0 marginal cost. The pools, their models, and their plan sizes are declared
+# once in [pools] below; never restate a plan tier anywhere else.
 # Nothing here is metered per-token. Tiebreaker isn't price, it's quota pressure:
 # spread load so no single pool's cap is the bottleneck — and match each task to
 # the pool with the right intelligence/taste, since spending a slot costs nothing.
+
+# The pools themselves, and the plan each one is on. Plan size changes THROUGHPUT,
+# never intelligence: on ChatGPT, Plus is ~15-90 Sol messages per 5h window and Pro
+# multiplies it (5x / 20x), with a weekly cap stacked on top. Since 2026-07-12 the 5h
+# window is suspended, so a Codex 429 is almost always the WEEKLY cap — the whole pool
+# is down, not one model. That is exactly why `fallback` hops pools instead of walking
+# siblings inside one. When a subscription changes, edit `plan` and nothing else: the
+# banner re-renders its capacity guidance from the matching `capacity.<plan>` line.
+[pools.claude]
+plan   = "max-5x"
+models = ["opus-5", "opus-4.8", "fable-5", "sonnet-5"]
+capacity.max-5x  = "one cap for every Claude model — bulk coding here starves ui/review; spend it on taste + judgement"
+capacity.max-20x = "roomy — Claude can take heavy coding too, not just the taste lanes"
+
+[pools.chatgpt]
+plan   = "pro-5x"
+models = ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"]
+capacity.plus    = "rationed: weekly cap binds fast, no Sol Pro tier. Spend sol ONLY on long terminal-agentic runs (the one axis it still beats opus-5 on); every other lane routes off this pool"
+capacity.pro-5x  = "comfortable for heavy+bulk; sol is the default flagship coder"
+capacity.pro-20x = "the cheapest volume on the box — put heavy AND bulk here and keep the Claude pool for taste/review"
+
+[pools.glm]
+plan   = "coding-plan"
+models = ["glm-5.2"]
+capacity.coding-plan = "flat and generous — the relief valve when either frontier pool is capped"
 
 # These are the GLOBAL defaults (a box with codex+Pro+GLM). Per-box reality —
 # a machine with no codex, say — overrides in gitignored config.local.toml
@@ -597,11 +622,14 @@ desc     = "Weekly tool auto-update (latest binaries)"
 bulk       = "gpt-5.6-terra"   # routine clear-spec impl, migrations — spares Sol's cap
 heavy      = "gpt-5.6-sol"     # hard / agentic / multi-file — the flagship coder
 mechanical = "glm"             # trivial edits, data munging — GLM coding plan (flat), spreads load off GPT/Claude
-ui         = "opus-4.8"        # anything user-facing (taste ≥ 7), Max-flat
-review     = "fable-5"         # plan/impl review — taste; add sol as cross-vendor 2nd on high stakes
+ui         = "opus-5"          # anything user-facing (taste ≥ 7), Max-flat
+review     = "opus-5"          # plan/impl review — add sol as cross-vendor 2nd on high stakes
 private    = "local"           # diff//data must NOT leave the box (NDA, secrets, client code) — cloud is not an option at any price
 verify     = "local"           # ASYNC closed-question checks: mint's anti-gaming lens, secret scan. Never interactive.
-fallback   = ["gpt-5.6-sol", "gpt-5.6-terra", "glm", "opus-4.8"]   # degrade across pools; all flat, so purely cap relief
+# Degrade by hopping POOLS, never by walking siblings inside the pool that just 429'd:
+# a Codex 429 is usually the weekly cap, so terra is dead the moment sol is. Skip the
+# failed pool entirely; terra sits last only for the rarer per-model window limit.
+fallback   = ["opus-5", "glm", "gpt-5.6-terra"]
 
 # Codex dispatch mechanics (verified 2026-07-14, codex 0.144.x). Rendered into attention
 # whenever a codex engine is active, so agents dispatch it correctly instead of hand-rolling.
