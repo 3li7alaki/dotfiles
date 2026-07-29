@@ -36,7 +36,13 @@ CEILING=${HANDOFF_CEILING:-450000}                      # absolute total, backst
                                                         # contaminated baseline (a first
                                                         # turn carrying a huge pasted spec)
 RENUDGE_DELTA=${HANDOFF_RENUDGE_DELTA:-60000}           # retry an ignored nudge after this
-STATE_DIR=${HANDOFF_STATE_DIR:-$HOME/.local/state/handoff}
+# Temp on purpose, and must match the path in skills/handoff/SKILL.md: this is where the
+# hook looks to decide a checkpoint actually happened, so if the two disagree the band
+# never closes and it nudges forever. Handoffs are consumed in minutes and are misleading
+# afterwards (they name a HEAD and a next action the repo has moved past), so letting the
+# OS expire them beats keeping an archive of confident, wrong files. $TMPDIR on macOS is
+# per-user and 0700, unlike world-writable /tmp. Set HANDOFF_STATE_DIR to keep them.
+STATE_DIR=${HANDOFF_STATE_DIR:-${TMPDIR:-/tmp}/handoff}
 
 command -v jq >/dev/null 2>&1 || exit 0
 

@@ -45,8 +45,17 @@ current answer, whereas a pasted copy is stale the moment it is written.
 ## 3. Write the file
 
 ```
-~/.local/state/handoff/<repo-basename>/<session-id>-<YYYYMMDD-HHMMSS>.md
+${TMPDIR:-/tmp}/handoff/<repo-basename>/<session-id>-<YYYYMMDD-HHMMSS>.md
 ```
+
+Temp, deliberately, so these expire on their own. A handoff is consumed within
+minutes or hours and is actively misleading after that: it names a HEAD, a dirty
+file list and a next action that the repo has already moved past. Keeping a
+permanent archive of them would mean keeping a pile of confident, wrong files. The
+transcript is the durable record, not this.
+
+On macOS `$TMPDIR` is per-user and already `0700`, which is better than `/tmp`
+(world-writable and sticky). Set `HANDOFF_STATE_DIR` if you genuinely want them kept.
 
 The session id is what makes two concurrent sessions in one repo unable to
 overwrite each other. If you cannot determine it, use `$$`.
@@ -57,11 +66,14 @@ Create the directory `0700` and the file `0600` before writing:
 mkdir -p "$dir" && chmod 700 "$dir" && install -m 600 /dev/null "$f"
 ```
 
-If that path is not writable, which happens under a sandboxed run such as
-`codex exec`, fall back to `$TMPDIR/handoff/<repo-basename>/` with the same modes and
-name, and say plainly in your report that it was staged there and why. Do not silently
-pick a different location, and do not give up on writing the file: an unwritable
-preferred path is not a reason to lose the handoff.
+If that path is not writable, which happens under some sandboxed runs, fall back to
+`/tmp/handoff/<repo-basename>/` with the same modes and name, and say plainly in your
+report that it was staged there and why. Do not silently pick a different location,
+and do not give up on writing the file: an unwritable preferred path is not a reason
+to lose the handoff.
+
+`hooks/handoff-checkpoint.sh` looks for the file here to know a checkpoint actually
+happened. If you write it somewhere else, the hook keeps asking.
 
 Every section below is REQUIRED. If a section is genuinely empty, write
 `none known` or `not verified`. Never drop one: a section you forgot and a section
