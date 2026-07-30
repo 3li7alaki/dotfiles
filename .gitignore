@@ -5,6 +5,8 @@ scratchpad/
 config.local.toml
 routing.local.md
 agent-integrations.local.md
+# the flattened hub Codex and opencode read; regenerated from AGENTS.md by setup.sh
+agents-global.local.md
 
 # pass-env reference maps are local metadata; actual decrypted values never belong here.
 .pass-env

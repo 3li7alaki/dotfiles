@@ -480,13 +480,16 @@ sys.exit(0 if found else 1)" 2>/dev/null \
     && ok "global CLAUDE.md points at hub" || bad "global CLAUDE.md not pointing at hub"
   [ -s "$DOTFILES/agent-integrations.local.md" ] \
     && ok "agent integrations rendered" || bad "agent-integrations.local.md missing/empty — run setup"
+  # The copy Codex and opencode read is only as good as its freshness, so check the
+  # rendered cache against AGENTS.md as well as the presence of the block itself.
+  "$DOTFILES/scripts/render-global-context.py" --check "$DOTFILES/agents-global.local.md" 2>/dev/null \
+    && ok "global context matches AGENTS.md" \
+    || bad "global context stale vs AGENTS.md, run setup"
   for agents_md in "$CODEX_DIR/AGENTS.md" "$OPENCODE_DIR/AGENTS.md"; do
-    if agent_context_active; then
-      grep -qF '<!-- >>> dotfiles:agent-integrations >>> -->' "$agents_md" 2>/dev/null \
-        && ok "$agents_md has integrations" || bad "$agents_md missing integration block"
-    elif grep -qF '<!-- >>> dotfiles:agent-integrations >>> -->' "$agents_md" 2>/dev/null; then
-      bad "$agents_md has disabled integration block"
-    fi
+    grep -qF '<!-- >>> dotfiles:global-context >>> -->' "$agents_md" 2>/dev/null \
+      && ok "$agents_md carries the global hub" || bad "$agents_md missing global-context block"
+    grep -qF '<!-- >>> dotfiles:agent-integrations >>> -->' "$agents_md" 2>/dev/null \
+      && bad "$agents_md still has the superseded agent-integrations block" || true
   done
   [ -f "$DOTFILES/config.local.toml" ] && ok "config.local.toml overlay present" \
     || say "· no config.local.toml (base defaults apply — copy configs/config.local.example.toml to override per-box)"
@@ -538,24 +541,14 @@ for a in $(section_keys apps); do
   fi
 done
 
-# 2. Render cross-app agent guidance and expose the same effective configuration to
-# Claude, Codex and opencode. Claude supports @ imports; Codex and opencode each read
-# a global AGENTS.md, so they receive a marker-owned block and any instructions the
-# user (or a plugin installer) authored around it stay intact.
+# 2. Render cross-app agent guidance. This only produces the file; AGENTS.md @-imports it
+# and step 5b is what carries it to Codex and opencode, which cannot follow an import.
 head "agent integrations"
 if $DRY; then
   say "would: render merged integrations -> agent-integrations.local.md"
-  if agent_context_active; then say "would: update managed block in ~/.codex/AGENTS.md and $OPENCODE_DIR/AGENTS.md"
-  else say "would: remove managed block from ~/.codex/AGENTS.md and $OPENCODE_DIR/AGENTS.md"; fi
 else
   "$DOTFILES/scripts/render-agent-integrations.py" > "$DOTFILES/agent-integrations.local.md"
-  if agent_context_active; then enabled=true; else enabled=false; fi
-  markdown_block_set "$CODEX_DIR/AGENTS.md" agent-integrations \
-    "$DOTFILES/agent-integrations.local.md" "$enabled"
-  mkdir -p "$OPENCODE_DIR"
-  markdown_block_set "$OPENCODE_DIR/AGENTS.md" agent-integrations \
-    "$DOTFILES/agent-integrations.local.md" "$enabled"
-  say "rendered; Codex + opencode managed blocks -> enabled=$enabled"
+  if agent_context_active; then say "rendered (guidance active)"; else say "rendered (no guidance active)"; fi
 fi
 
 # 2b. Wire global CLAUDE.md -> this hub (idempotent single line).
@@ -887,11 +880,21 @@ for c in $(section_keys cron); do
   say "$c: cron '$sched' -> enabled=$enabled"
 done
 
-# 5. Render routing.local.md (gitignored) from merged config — CLAUDE.md @-imports it.
+# 5. Render routing.local.md (gitignored) from merged config; AGENTS.md @-imports it.
 # Same renderer as the routing hook, so the file and the banner can never disagree.
 head "routing"
 run "bash '$DOTFILES/hooks/routing-activate.sh' > '$DOTFILES/routing.local.md'"
-say "routing.local.md rendered (gitignored, imported by CLAUDE.md)"
+say "routing.local.md rendered (gitignored, imported by AGENTS.md)"
+
+# 5b. Carry the whole hub to the harnesses that cannot follow an import. Runs LAST of the
+# render steps on purpose: it inlines routing.local.md and agent-integrations.local.md, so
+# running it before those exist would bake a gap into every Codex and opencode session.
+head "global context"
+if $DRY; then
+  say "would: flatten AGENTS.md -> managed block in ~/.codex/AGENTS.md and $OPENCODE_DIR/AGENTS.md"
+else
+  run "'$DOTFILES/scripts/render-global-context.py' --install"
+fi
 
 # 6. Verify everything enabled actually landed.
 if $DRY; then

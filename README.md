@@ -44,7 +44,7 @@ use `scripts/render-readme-catalog.py --check` to catch drift.
 | Add-on | Class | Platform | Default | Purpose |
 | --- | --- | --- | --- | --- |
 | [slayzone](https://github.com/debuglebowski/slayzone) | Desktop app + CLI | darwin, linux | on | Local-first task board, worktree/terminal workspace, and agent-config library |
-| [t3code](https://github.com/pingdotgg/t3code) | Desktop app + CLI | darwin, linux | on | Primary multi-harness agent chat and diff-review surface |
+| [t3code](https://github.com/pingdotgg/t3code) | Desktop app + CLI | darwin, linux | on | Multi-harness agent chat, diff review, and the only phone-reachable surface |
 
 ### Command-line tools
 
@@ -52,6 +52,7 @@ use `scripts/render-readme-catalog.py --check` to catch drift.
 | --- | --- | --- | --- | --- |
 | [stow](https://www.gnu.org/software/stow/) | CLI | Linux / macOS | on | Symlink-farm manager used by setup for complete, repo-owned configuration files |
 | [tmux](https://github.com/tmux/tmux) | CLI | Linux / macOS | on | Persistent terminal multiplexer for durable sessions, panes, and remote work |
+| [herdr](https://github.com/herdrdev/herdr) | CLI | Linux / macOS | on | Agent-aware multiplexer: tmux's model plus per-pane agent state and a socket API |
 | [pass](https://www.passwordstore.org/) | CLI | Linux / macOS | on | GPG-encrypted local secret store with a no-plaintext-file environment launcher |
 | [github-cli](https://github.com/cli/cli) | CLI | Linux / macOS | on | Official GitHub CLI for pull requests, checks, issues, releases, and API access |
 | [jq](https://github.com/jqlang/jq) | CLI | Linux / macOS | on | Lightweight structural JSON querying, validation, filtering, and transformation |
@@ -96,7 +97,7 @@ use `scripts/render-readme-catalog.py --check` to catch drift.
 
 | Integration | Requires | Default | Ownership |
 | --- | --- | --- | --- |
-| slayzone-t3-workflow | slayzone, t3code | on | SlayZone owns task/worktree/shipping; T3 is the primary chat in that existing workspace |
+| slayzone-t3-workflow | slayzone, t3code | on | The agent files the Slay task; SlayZone cuts the worktree; T3 and herdr consume it |
 
 ### Official Claude plugins
 
@@ -277,7 +278,7 @@ task shape
 
 The base rules in `config.toml` merge with `config.local.toml`, then
 `hooks/routing-activate.sh` renders that machine’s effective view to the gitignored
-`routing.local.md`. `CLAUDE.md` imports the rendered file, and the routing hook refreshes
+`routing.local.md`. `AGENTS.md` imports the rendered file, and the routing hook refreshes
 the same information in active sessions.
 
 If a cloud engine is unavailable or rate-limited, the agent walks `[routing].fallback`
@@ -297,10 +298,13 @@ endpoint should not be selected.
 | `configs/` | Templates copied or rendered into user config locations |
 | `stow/` | Complete static configurations linked into their declared target |
 | `hooks/` | Marker-managed Claude hooks and routing renderer |
+| `AGENTS.md` | The global instruction hub, under the filename every harness reads |
+| `CLAUDE.md` | A one-line pointer at `AGENTS.md`, kept only because Claude looks for it |
 | `skills/` | Skills owned by this repo and symlinked into an agent |
-| `tools/` | Version-controlled instruction pages imported by `CLAUDE.md` |
+| `tools/` | Version-controlled instruction pages imported by `AGENTS.md` |
 | `scripts/` | Maintenance and consistency helpers |
 | `agent-integrations.local.md` | Gitignored, generated cross-app instructions for this machine |
+| `agents-global.local.md` | Gitignored, the flattened hub that Codex and opencode receive |
 
 ## Agent workspace workflow
 
@@ -310,23 +314,74 @@ The operating model deliberately gives each layer one job:
 | --- | --- | --- |
 | Machine baseline | dotfiles | Apps, CLIs, global skills/MCPs, hooks, routing, verification |
 | Portfolio and isolation | SlayZone | Kanban, task state, task worktrees, terminals, browser, Library trials |
-| Agent conversation | T3 Code | Primary chat, harness/model selection, and diff review |
+| Agent conversation | T3 Code | Chat, harness/model selection, diff review, and the phone |
+| Terminal surface | herdr | Panes, per-pane agent state, and durable local sessions |
 
-For a Slay-owned task, open its existing task worktree in T3 Code and start a normal
-thread there. Do not ask T3 to create another worktree for that thread. T3 supports an
-existing project working directory as the session cwd; its optional worktree action is
-for work not already isolated by SlayZone. Launching `t3` from the Slay task terminal
-also carries `SLAYZONE_TASK_ID` and `SLAYZONE_PROJECT_ID` into the process, allowing the
-agent to use `slay` to read or update its Kanban task. T3 itself needs no Slay plugin:
-the Codex or Claude process underneath it reads the generated global instructions and
-the shared `slay` skill.
+The board is never filed by hand. You chat in T3 or in a herdr pane, and the agent
+decides whether the request deserves a task. `scripts/slay-onboard.sh` is what makes that
+possible per repo: it creates the Slay project, installs the built-in slay skills, writes
+a marker-guarded `# SlayZone Environment` block into the repo's `AGENTS.md`, and registers
+two automations on `task_status_change -> in_progress`.
 
-`setup.sh` renders `agent-integrations.local.md` from the merged configuration. Claude
-imports that file through the dotfiles hub; Codex receives the same text in a
-marker-owned block in `~/.codex/AGENTS.md`. The block is removed automatically when the
-last integration/tool preference is disabled. The global `slay` skill is linked for
-both agents and consults the installed CLI help at runtime, avoiding a copied command
-catalog that would go stale.
+That marker is the signal the generated instructions key on. An agent with no
+`$SLAYZONE_TASK_ID` that finds the block knows it is at the orchestrator's desk and files
+the task itself, directly at the status the automations watch:
+
+```bash
+slay tasks create "<title>" --project <name> --status in_progress
+```
+
+SlayZone then cuts one worktree and both automations hand that same path onward, to T3 as
+a project and to herdr as a workspace. One tree, two views, no tool cutting a second
+checkout of a repo SlayZone already isolated. An agent that does have `$SLAYZONE_TASK_ID`
+is already inside that tree and files nothing.
+
+Both automation commands are stored as absolute paths resolved at onboard time. The
+SlayZone app dispatches them with launchd's default `PATH`, which contains neither
+`~/.local/bin` nor `/opt/homebrew/bin`, so a bare `t3` or `herdr` would resolve to
+nothing. The herdr half is skipped entirely when herdr is not installed, and needs a
+running herdr server when it is; with no server there is no desk to open a pane on, and
+T3 still receives the worktree.
+
+Start the herdr server by running `herdr`, never from a launch agent. On macOS a server
+started in a `Background` launchd context passes that context to every pane, which breaks
+keychain-backed CLIs and, in some reports, DNS inside panes. Upstream treats this as
+expected macOS behavior rather than a bug to fix.
+
+### One hub, every harness
+
+`AGENTS.md` is the source of truth and `CLAUDE.md` is a one-line pointer at it, because
+`AGENTS.md` is the filename Codex, opencode and the rest already read. Per repo that is all
+it takes: each harness finds the file it looks for, natively.
+
+The global layer is the part no harness handles, and the constraints are measured, not
+assumed:
+
+- Only Claude expands `@` imports into context. Codex reads the line and shells out to the
+  file only when it happens to judge it relevant, so nothing load-bearing can sit behind an
+  import. Before this wiring existed, Codex answered `ABSENT` when asked what its
+  instructions forbid about dashes.
+- Codex reads no `AGENTS.md` above a repository root, with or without a git repo, so
+  `~/.codex/AGENTS.md` is its only global slot and that path is fixed.
+- That fixed file has other owners. It currently holds a `codebase-memory-mcp` block and a
+  caveman block alongside this one, which is why symlinking it at the hub is wrong: foreign
+  installers would write into this git repo on every run.
+
+So `scripts/render-global-context.py` flattens `AGENTS.md` and its imports into one
+self-contained document and installs it as a marker-scoped block in each harness's global
+file, leaving the other blocks untouched. Regions fenced with `<!-- claude-only -->` are
+dropped from that copy and kept for Claude, which reads the sources directly; use it for
+guidance that would be false elsewhere, like `tools/RTK.md` describing a Claude Code hook.
+
+Accuracy is maintained by the routing hook, not by remembering to run setup. The routing
+banner probes engine endpoints live, so it changes without any config edit; after printing,
+the hook persists the same text to `routing.local.md` and re-syncs both harness blocks from
+it. Around 20ms, and a no-op when nothing changed. `setup.sh --verify` additionally
+diffs the rendered cache against `AGENTS.md`, so a stale copy is a reported failure rather
+than something you discover through a model behaving oddly.
+
+The global `slay` skill is linked for both agents through `~/.agents/skills/` and consults
+the installed CLI help at runtime, avoiding a copied command catalog that would go stale.
 
 Use SlayZone's Library to discover and trial skills or MCPs, with project-scoped links
 for experiments. When an add-on becomes dependable, promote its source, install command,
@@ -335,7 +390,13 @@ without making SlayZone's local SQLite database the only record of the setup.
 
 Avoid dual ownership: global agent instructions, hooks, MCP registrations, binaries,
 and routing remain dotfiles-owned. SlayZone owns task state, worktrees, and shipping;
-T3 consumes the worktree as the chat and review surface.
+T3 and herdr consume that worktree as the chat surface and the terminal surface.
+
+T3 is also the only surface that reaches the machine from a phone. Turn on Settings >
+Connections > Network access and pair a device from the QR code behind `Create link`;
+pairing exchanges a one-time bootstrap credential for a scoped token against your own
+server, so it needs no T3 Connect account when both devices share a tailnet. The backend
+lives in the desktop app, so the app has to be running for the phone to reach anything.
 
 ## Requirements and portability
 

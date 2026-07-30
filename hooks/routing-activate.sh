@@ -9,8 +9,20 @@
 
 CONFIG="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/config.toml"
 [ -f "$CONFIG" ] || exit 0
+DOTFILES="$(dirname "$CONFIG")"
 
-CONFIG="$CONFIG" python3 <<'PY'
+# The banner below is live: it probes each engine's endpoint, so local-model state changes
+# without anyone editing config. Claude sees that freshness through this injection, but the
+# copy Codex and opencode read is a file, and a file is only as accurate as its last write.
+# So after printing, persist the same text and re-sync the harness blocks from it. Both are
+# no-ops when nothing changed, and both are best-effort: a routing refresh must never be
+# the reason a prompt fails.
+refresh_global_context() {
+  printf '%s\n' "$1" > "$DOTFILES/routing.local.md" 2>/dev/null || return 0
+  "$DOTFILES/scripts/render-global-context.py" --install --quiet >/dev/null 2>&1 || true
+}
+
+BANNER="$(CONFIG="$CONFIG" python3 <<'PY'
 import os, tomllib
 d = tomllib.load(open(os.environ["CONFIG"], "rb"))
 local = os.environ["CONFIG"].replace("config.toml", "config.local.toml")
@@ -80,3 +92,7 @@ elif "local" in e:
     print("Use it when the data must not leave the box, or for closed-question verification.")
 print("\nClaude-native models (opus/fable) run via the Agent/Workflow model param, no external call.")
 PY
+)"
+
+printf '%s\n' "$BANNER"
+refresh_global_context "$BANNER"
