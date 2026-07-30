@@ -60,11 +60,20 @@ On macOS `$TMPDIR` is per-user and already `0700`, which is better than `/tmp`
 The session id is what makes two concurrent sessions in one repo unable to
 overwrite each other. If you cannot determine it, use `$$`.
 
-Create the directory `0700` and the file `0600` before writing:
+Create the directory, then write the file straight to that path:
 
 ```sh
-mkdir -p "$dir" && chmod 700 "$dir" && install -m 600 /dev/null "$f"
+mkdir -p "$dir" && chmod 700 "$dir"
 ```
+
+Do NOT pre-create the file. `install -m 600 /dev/null "$f"` and `touch` both leave an
+existing empty file, and a file-writing tool that requires a prior read will then
+error, force a pointless read of nothing, and only write on the third attempt. Write
+to the path directly; it does not exist yet, which is exactly why that works.
+
+The `0600` comes after, folded into the command you already run in section 5, so it
+costs no extra step. The mode is belt and braces anyway: the directory is `0700`, so
+nothing can traverse into it regardless of what the file itself says.
 
 If that path is not writable, which happens under some sandboxed runs, fall back to
 `/tmp/handoff/<repo-basename>/` with the same modes and name, and say plainly in your
@@ -173,9 +182,11 @@ You are authoring this file, not dumping a transcript, so nothing lands in it th
 you did not choose to put there. Keep it that way. If `gitleaks` is on PATH,
 `gitleaks detect --no-git --source <file>` is a cheap second pair of eyes.
 
-Then copy it, best effort, and never let a clipboard failure read as success:
+Then lock the mode down and copy it, in one command. Best effort on the clipboard, and
+never let a clipboard failure read as success:
 
 ```sh
+chmod 600 "$f"
 pbcopy < "$f" 2>/dev/null || wl-copy < "$f" 2>/dev/null \
   || xclip -selection clipboard < "$f" 2>/dev/null \
   || echo "clipboard unavailable"
