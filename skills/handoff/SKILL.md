@@ -21,7 +21,7 @@ either stands on its own or is lost.
 | "done, what next" | scope closed. What is now unblocked, what is still open. |
 | "just the auth bug" | one subproblem. Everything else dropped. |
 | "for codex", "for another box" | assume no local CLIs and no env vars, inline more. |
-| "loop", "baton", "headless", "unattended" | autonomous. Changes the paste block, see section 4. |
+| "wait for me", "do not start", "review first" | hold. Changes the paste block, see section 4. |
 
 Intent steers what to emphasize. It never suppresses dirty state, a failed gate,
 unresolved risk, or a decision the user still owes. Those appear in every handoff.
@@ -154,18 +154,22 @@ with nothing in it look identical to the reader, and one of them is a lie.
 
 Two endings. Pick by intent, never mix them up.
 
-**Interactive** (the default):
-
-> Read every file named above before doing anything. Then confirm what you
-> understand the state to be, and wait for my instructions.
-
-**Autonomous** (intent mentions a loop, baton, headless, or unattended run):
+**Carry on** (the default):
 
 > Read every file named above, then carry out the Next action. Stop and report if
 > anything in State no longer matches what you find.
 
-An autonomous run that gets the interactive ending waits forever for a user message
-that is never coming. That is a hang, not a handoff.
+**Hold** (only when the intent in `$ARGUMENTS` explicitly asked to wait, to not start
+yet, or to have the state confirmed before any work):
+
+> Read every file named above before doing anything. Then confirm what you
+> understand the state to be, and wait for my instructions.
+
+Pasting a handoff IS the instruction to continue. Someone who pastes it and presses
+enter has already said go, so a default that answers with a summary and then waits
+has stalled the session for nothing. Only an explicit ask in the intent earns the
+hold ending, and a headless or unattended run must never get it: there is no user
+message coming, so it hangs.
 
 ## 5. Gate, then report
 
