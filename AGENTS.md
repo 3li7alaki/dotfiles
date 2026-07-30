@@ -42,7 +42,7 @@ Never restate a plan tier here: it goes stale the day a subscription changes.
 |---------------|------|--------------|-------|---------|
 | gpt-5.6-sol   | 2    | 9            | 6     | chatgpt |
 | gpt-5.6-terra | 2    | 7            | 5     | chatgpt |
-| gpt-5.6-luna  | 2    | 5            | 4     | chatgpt |
+| gpt-5.6-luna  | 2    | 7*           | 4     | chatgpt |
 | sonnet-5      | 3    | 5            | 7     | claude  |
 | opus-4.8      | 2    | 7            | 8     | claude  |
 | fable-5       | 2    | 9            | 9     | claude  |
@@ -54,6 +54,7 @@ How to apply:
 - Cost is a tie-breaker only; when axes conflict for anything that ships: intelligence > taste > cost. Every pool is flat, so cost rarely decides: spend the better model, and spread load so no one pool's cap is the bottleneck.
 - GPT / Codex availability is per-box: check the routing banner injected at session start (rendered live from `config.toml` + `config.local.toml`). On a box without codex, substitute glm (via opencode) wherever these lines say a gpt-5.6 tier.
 - Sol is the best agentic/terminal coder. Hard/multi-file/agentic → sol; routine clear-spec/migrations → terra (spares Sol's cap); trivial edits/data-munging → glm-5.2 (#2 on LMArena Code, 1M ctx).
+- `7*` for luna means the score is a dial, not a fact: it is the one model here whose reasoning effort spans its whole range, from AA-index ~33 at effort `none` to ~51 at high, which is level with glm-5.2 Max and above opus-5 on low. Codex defaults it to `none`, so an unqualified `codex exec -c model=gpt-5.6-luna` gets you the 33, not the 51. ALWAYS pass the effort you meant: `-c model_reasoning_effort="high"` for anything real, and leave it at `none` only for closed-question checks and triage (the verify lane's stand-in while the local model is down). Cheapest cost-per-task on the box at any effort, so it is the volume lane whenever taste is not in play.
 - Anything user-facing (UI, copy, API design) needs taste ≥ 7 → opus/fable, never a GPT tier.
 - Reviews of plans/implementations: opus-5 default (it leads Fable on agentic-coding and knowledge-work benchmarks and shares its pool), add sol (or glm) as an independent cross-family perspective when stakes are high. Spend cross-family diversity, all flat.
 - fable-5 keeps one job: multi-hour autonomous runs and the architect lane, where its longer-horizon behaviour still shows. Everywhere else opus-5 supersedes it.

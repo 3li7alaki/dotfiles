@@ -643,7 +643,7 @@ mechanical = "glm"             # trivial edits, data munging — GLM coding plan
 ui         = "opus-5"          # anything user-facing (taste ≥ 7), Max-flat
 review     = "opus-5"          # plan/impl review — add sol as cross-vendor 2nd on high stakes
 private    = "local"           # diff//data must NOT leave the box (NDA, secrets, client code) — cloud is not an option at any price
-verify     = "local"           # ASYNC closed-question checks: mint's anti-gaming lens, secret scan. Never interactive.
+verify     = "local, else gpt-5.6-luna at effort=none"   # ASYNC closed-question checks: mint's anti-gaming lens, secret scan. Never interactive. Luna stands in whenever local is down, and this is the one lane where its `none` floor is the right setting: a closed question needs no reasoning.
 # Degrade by hopping POOLS, never by walking siblings inside the pool that just 429'd:
 # a Codex 429 is usually the weekly cap, so terra is dead the moment sol is. Skip the
 # failed pool entirely; terra sits last only for the rarer per-model window limit.
@@ -681,6 +681,14 @@ active = true
 
 [engines."gpt-5.6-terra"]
 run    = "codex exec -c model=gpt-5.6-terra"                # mid tier, Pro-flat
+active = true
+
+# Luna's intelligence is a DIAL, not a point: AA-index ~33 at effort `none`, ~51 at high
+# (level with glm-5.2 Max, above opus-5 on low) at the cheapest cost-per-task on the box.
+# Codex defaults it to `none`, so the run line pins the effort instead of inheriting the
+# floor silently. Drop to `none` only for closed questions: verify, triage, secret scans.
+[engines."gpt-5.6-luna"]
+run    = "codex exec -c model=gpt-5.6-luna -c model_reasoning_effort=\"high\""   # cheap volume tier, Pro-flat
 active = true
 
 [engines.glm]
