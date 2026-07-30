@@ -25,14 +25,14 @@ probe_darwin = "/Applications/T3 Code (Alpha).app"
 probe_linux  = "COMMAND:t3"
 cli      = "t3"
 homepage = "https://github.com/pingdotgg/t3code"
-desc     = "Primary multi-harness agent chat and diff-review surface"
+desc     = "Multi-harness agent chat, diff review, and the only phone-reachable surface"
 
 # ── Agent integrations (generated instructions; no background service) ──────────
 
 [integrations.slayzone-t3-workflow]
 enabled = true
 requires_apps = ["slayzone", "t3code"]
-desc = "SlayZone owns task/worktree/shipping; T3 is the primary chat in that existing workspace"
+desc = "The agent files the Slay task; SlayZone cuts the worktree; T3 and herdr consume it"
 
 # ── Tools (PATH binaries; some also register a Claude hook) ───────────────────
 
@@ -58,6 +58,23 @@ sessions and inspect existing sessions before creating another one. Do not attac
 interactive client, inject keys into an existing pane, kill sessions, or stop the tmux server
 unless the user explicitly requests it. For ordinary short commands, use the normal execution
 tool instead of adding an unnecessary tmux layer.
+"""
+
+[tools.herdr]
+enabled = true
+type    = "binary"
+bin     = "COMMAND:herdr"
+install = "bash $DOTFILES/scripts/install-herdr.sh"
+homepage = "https://github.com/herdrdev/herdr"
+desc    = "Agent-aware multiplexer: tmux's model plus per-pane agent state and a socket API"
+agent_guidance = """
+`herdr` is the interactive multiplexer on boxes that have it, and it reads agent state per
+pane (blocked, working, done). Prefer it over `tmux` for durable local sessions; `tmux`
+remains the fallback on hosts where herdr is not installed. Do not create herdr worktrees:
+SlayZone owns task worktrees, and a second checkout of a repo it already isolated is the
+exact failure the SlayZone/T3 wiring exists to prevent. Do not attach the user's client,
+inject keys into an existing pane, close panes, or stop the herdr server unless asked. For
+ordinary short commands use the normal execution tool rather than adding a herdr layer.
 """
 
 [tools.pass]

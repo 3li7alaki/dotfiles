@@ -37,23 +37,43 @@ def active(data: dict, name: str) -> bool:
 def rendered_sections(data: dict) -> list[str]:
     sections: list[str] = []
     if active(data, "slayzone-t3-workflow"):
-        sections.append("""## SlayZone + T3 Code
+        sections.append("""## SlayZone + T3 Code + herdr
 
-T3 Code is the primary chat surface, not the task orchestrator. For work associated
-with SlayZone, open T3 from the Slay task terminal and use the task's existing working
-directory. Never create a second T3 worktree for a task already isolated by SlayZone.
+You are the orchestrator, not the board's clerk. The human chats in T3 Code or in a
+herdr pane and never files tickets by hand. Turning a request into a SlayZone task is
+your job, and SlayZone cutting the worktree is what gives that task somewhere to live.
 
-These rules activate at runtime only when `$SLAYZONE_TASK_ID` is present:
+Load the `slay` skill before running the CLI, and discover subcommands and status keys
+from the installed CLI's help rather than a copied command list.
 
-- Load the `slay` skill before running the CLI; discover commands from the installed
-  CLI's help instead of relying on a copied command list.
-- Use `$SLAYZONE_TASK_ID` and `$SLAYZONE_PROJECT_ID` as the current task context.
-- Keep SlayZone responsible for Kanban state, task worktrees, and shipping.
-- Keep T3 responsible for the conversation, harness/model selection, and diff review.
-- The underlying Codex or Claude agent performs Slay operations; T3 needs no plugin.
+Decide which of three states you are in, in this order:
 
-When the Slay environment variables are absent, treat this as an ordinary T3/Codex or
-Claude session and do not infer a Slay task from the current directory.""")
+**1. `$SLAYZONE_TASK_ID` is set.** You are already inside a task worktree. Use
+`$SLAYZONE_TASK_ID` and `$SLAYZONE_PROJECT_ID` as the current context. Never create a
+second task for work that belongs to this one, and never cut another worktree: not with
+`git worktree`, not with herdr's new-worktree action, not through T3. This tree is the
+one SlayZone already isolated for you.
+
+**2. No task id, but the repo is onboarded.** The repo's AGENTS.md carries a
+`# SlayZone Environment` block, written by `scripts/slay-onboard.sh`. You are at the
+orchestrator's desk. When the request is real work, meaning it will edit files and
+outlive a single exchange, create the task yourself:
+
+    slay tasks create "<short imperative title>" --project <name> --status in_progress
+
+Creating it directly in the status the automations watch is deliberate: SlayZone cuts
+the worktree, then hands the same path to T3 as a project and to herdr as a workspace.
+Tell the human where the work moved, then continue there. Do not open a task for a
+question you can answer by reading, a one-line fix, or anything read-only. An empty
+worktree costs more than it saves.
+
+**3. No task id and no block.** Ordinary session. Do not touch SlayZone, and do not
+infer a project from the current directory. Offer onboarding if the human wants it.
+
+Across all three: SlayZone owns Kanban state, task worktrees, and shipping. T3 owns the
+conversation, harness and model selection, and diff review, including from the phone.
+herdr owns panes and agent state at the desk. The underlying Codex or Claude agent
+performs the Slay operations; T3 needs no plugin.""")
 
     tool_sections = []
     for name, tool in data.get("tools", {}).items():
