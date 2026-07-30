@@ -169,18 +169,31 @@ that is never coming. That is a hang, not a handoff.
 
 ## 5. Gate, then report
 
-Before you say one word about clearing, check:
+Run the gate. Do not grade your own work here:
 
-- [ ] the file exists and is non-empty
-- [ ] it names the repo root, branch, and HEAD you just read
-- [ ] every path it references exists on disk
-- [ ] Next action is a specific thing, not a topic
-- [ ] no section was dropped
-- [ ] no credential, token, key, or private URL is in it
+```sh
+<this skill's base directory>/check.sh "$f"
+```
 
-You are authoring this file, not dumping a transcript, so nothing lands in it that
-you did not choose to put there. Keep it that way. If `gitleaks` is on PATH,
-`gitleaks detect --no-git --source <file>` is a cheap second pair of eyes.
+It lives beside this file rather than in the repo's `scripts/`, so it resolves from
+whatever path the skill was loaded through and needs no environment variable. Do not
+reach for `$DOTFILES`: it is not exported in a shell.
+
+It checks the things that can be checked deterministically: every section present AND
+non-empty, a paste block with something in it, a `Written` timestamp, a worktree that
+exists, referenced paths that still resolve, a Next action that is not a placeholder,
+no dash, mode `0600`, and `gitleaks` if it happens to be installed.
+
+**Non-zero exit means do not tell the user to reset.** Fix what it names and run it
+again. Warnings are advisory: a stale HEAD is expected, since these files are meant to
+be consumed quickly and verified on arrival.
+
+If the script is missing, fall back to checking that list by hand, and say that you did
+so rather than implying the gate ran.
+
+The one thing no script can check is whether the content is any good. You are authoring
+this file, not dumping a transcript, so nothing lands in it that you did not choose to
+put there: no credential, no token, no private URL.
 
 Then lock the mode down and copy it, in one command. Best effort on the clipboard, and
 never let a clipboard failure read as success:
