@@ -418,10 +418,14 @@ verify_all() {
     label=$(cfg "daemons.$d.label"); port=$(cfg "daemons.$d.port")
     [ -f "$HOME/Library/LaunchAgents/$label.plist" ] \
       && ok "daemon $d plist installed" || bad "daemon $d plist missing: ~/Library/LaunchAgents/$label.plist"
+    # A stopped daemon is only a failure if launchd is supposed to be running it. `model off`
+    # boots it out, and reporting that as broken would train you to ignore real failures.
     if curl -sf -m 3 "http://127.0.0.1:$port/v1/models" >/dev/null 2>&1; then
       ok "daemon $d answering on :$port"
+    elif launchctl print "gui/$(id -u)/$label" >/dev/null 2>&1; then
+      bad "daemon $d loaded but NOT answering on :$port (check $XDG_STATE/local-model.log)"
     else
-      bad "daemon $d NOT answering on :$port — local lane is dead (check $XDG_STATE/local-model.log)"
+      say "· daemon $d stopped on purpose (\`model on\` to start; the local lane stays dead until then)"
     fi
   done
   for s in $(section_keys skills); do
@@ -859,14 +863,22 @@ text = text.replace("LABEL", os.environ["LABEL"])
 text = text.replace("HOME/", os.environ["HOMEDIR"] + "/")
 open(dst, "w").write(text)
 PY
-    launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
-    # bootout is async — wait for teardown so the re-bootstrap doesn't race (else it fails
-    # "already loaded" and the daemon keeps the stale plist, ignoring config changes).
-    for _ in 1 2 3 4 5; do launchctl print "gui/$(id -u)/$label" >/dev/null 2>&1 || break; sleep 1; done
-    launchctl bootstrap "gui/$(id -u)" "$agent" 2>/dev/null || \
-      say "$d: ⚠ launchctl bootstrap failed — check $XDG_STATE/local-model.log"
+    # Setup never STARTS a daemon, it only keeps the plist current. `model off` means off,
+    # and a setup run for an unrelated reason has no business overriding that. So: reload
+    # only what launchd is already running, to pick up config changes, and otherwise leave
+    # the rendered plist sitting there for `model on`.
+    if launchctl print "gui/$(id -u)/$label" >/dev/null 2>&1; then
+      launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
+      # bootout is async — wait for teardown so the re-bootstrap doesn't race (else it fails
+      # "already loaded" and the daemon keeps the stale plist, ignoring config changes).
+      for _ in 1 2 3 4 5; do launchctl print "gui/$(id -u)/$label" >/dev/null 2>&1 || break; sleep 1; done
+      launchctl bootstrap "gui/$(id -u)" "$agent" 2>/dev/null || \
+        say "$d: ⚠ launchctl bootstrap failed — check $XDG_STATE/local-model.log"
+      say "$d: $runtime reloaded -> 127.0.0.1:$port (idle-unloads; model = $model)"
+    else
+      say "$d: $runtime plist current, left stopped (start it with \`model on\`)"
+    fi
   fi
-  say "$d: $runtime -> 127.0.0.1:$port (idle-unloads; model = $model)"
 done
 
 # 4b. Cron entries (marker-tagged, idempotent — remove on disable).

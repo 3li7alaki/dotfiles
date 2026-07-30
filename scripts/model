@@ -18,11 +18,14 @@ wait_healthy(){ for _ in $(seq 1 40); do healthy && return 0; sleep 1; done; ret
 # bootout returns before the process actually exits, so the port can still answer.
 wait_down(){ for _ in $(seq 1 20); do healthy || return 0; sleep 0.5; done; return 1; }
 # routing.local.md is the same renderer setup.sh uses; it bakes in liveness, so it goes
-# stale the moment the daemon flips. Re-render on every state change.
+# stale the moment the daemon flips. Re-render on every state change, then push the same
+# truth to Codex and opencode: they read a flattened copy and cannot follow an import, so
+# without this they would keep routing private work at an endpoint that stopped answering.
 sync_routing(){ [ -f "$dotfiles/routing.local.md" ] || return 0
   bash "$dotfiles/hooks/routing-activate.sh" > "$dotfiles/routing.local.md.tmp" \
     && mv "$dotfiles/routing.local.md.tmp" "$dotfiles/routing.local.md" \
-    || rm -f "$dotfiles/routing.local.md.tmp"; }
+    || rm -f "$dotfiles/routing.local.md.tmp"
+  "$dotfiles/scripts/render-global-context.py" --install --quiet >/dev/null 2>&1 || true; }
 
 case "${1:-status}" in
   on)
