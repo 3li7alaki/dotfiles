@@ -1,0 +1,28 @@
+#!/usr/bin/env sh
+# Emit the fzf-tab plugin source line plus its styles, wherever the package landed.
+set -eu
+
+[ "${2:-${1:-}}" = "zsh" ] || { printf 'usage: fzf-tab-shell-init init zsh\n' >&2; exit 2; }
+
+plugin=""
+for candidate in \
+  "${HOMEBREW_PREFIX:-/opt/homebrew}/share/fzf-tab/fzf-tab.zsh" \
+  /usr/local/share/fzf-tab/fzf-tab.zsh \
+  /usr/share/zsh/plugins/fzf-tab/fzf-tab.zsh \
+  "$HOME/.local/share/fzf-tab/fzf-tab.zsh"
+do
+  [ -r "$candidate" ] && { plugin="$candidate"; break; }
+done
+
+[ -n "$plugin" ] || { printf 'fzf-tab plugin not found\n' >&2; exit 1; }
+
+printf "source '%s'\n" "$plugin"
+cat <<'ZSH'
+# fzf-tab draws the menu now, so zsh's own menu has to stand down.
+zstyle ':completion:*' menu no
+zstyle ':fzf-tab:*' use-fzf-default-opts yes
+zstyle ':fzf-tab:*' switch-group '<' '>'
+# Directory completions (including zoxide's, since it is `cd`) preview their contents.
+zstyle ':fzf-tab:complete:cd:*' fzf-preview 'ls -1 "$realpath"'
+zstyle ':fzf-tab:complete:__zoxide_z:*' fzf-preview 'ls -1 "$realpath"'
+ZSH

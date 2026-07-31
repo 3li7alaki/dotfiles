@@ -201,6 +201,16 @@ for display only: never write it back to a file, a commit message, or a diff, an
 match against it. See docs/arabic-terminal.md for the terminal-side options.
 """
 
+[tools.zsh-completion]
+enabled = true
+type    = "binary"
+bin     = "COMMAND:zsh-shell-init"
+install = "mkdir -p $HOME/.local/bin && ln -sfn $DOTFILES/scripts/zsh-shell-init $HOME/.local/bin/zsh-shell-init"
+shell_command = "zsh-shell-init"
+shells  = ["zsh"]                  # must come first: everything below registers via compdef
+homepage = "https://zsh.sourceforge.io/Doc/Release/Completion-System.html"
+desc    = "zsh completion system (compinit) with cached dump, case-insensitive and mid-word matching"
+
 [tools.fzf]
 enabled = true
 type    = "binary"
@@ -218,6 +228,18 @@ human-driven workflow clearly benefits from one. Do not launch fzf in non-intera
 commands or use it where a deterministic result is required; use `rg`, `fd`, `jq`, or native
 tool filters directly for automation. Never assume an fzf selection occurred without a TTY.
 """
+
+[tools.fzf-tab]
+enabled = true
+type    = "binary"
+bin     = "COMMAND:fzf-tab-shell-init"
+install = "brew install fzf-tab && mkdir -p $HOME/.local/bin && ln -sfn $DOTFILES/scripts/fzf-tab-shell-init $HOME/.local/bin/fzf-tab-shell-init"
+verify_command = "command -v fzf-tab-shell-init >/dev/null 2>&1 && fzf-tab-shell-init init zsh >/dev/null 2>&1"
+shell_command = "fzf-tab-shell-init"
+shells  = ["zsh"]                  # after zsh-completion (needs compinit), before zoxide
+os      = "darwin"                 # brew formula; a Linux box would clone the plugin instead
+homepage = "https://github.com/Aloxaf/fzf-tab"
+desc    = "Every zsh TAB becomes an fzf picker: paths, git refs, flags, processes, zoxide jumps"
 
 [tools.fd]
 enabled = true

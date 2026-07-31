@@ -1,0 +1,29 @@
+#!/usr/bin/env sh
+# Turn on zsh's completion system and give it humane matching.
+#
+# Nothing below is cosmetic: fzf's tab completion, fzf-tab, and zoxide's `cd <query><TAB>`
+# all register through `compdef`, which only exists after `compinit`. Without this block a
+# shell looks fine and every one of those integrations is silently inert.
+set -eu
+
+[ "${2:-${1:-}}" = "zsh" ] || { printf 'usage: zsh-shell-init init zsh\n' >&2; exit 2; }
+
+cat <<'ZSH'
+autoload -Uz compinit
+# Rebuild the dump at most once a day: compinit's full security audit is the slow path,
+# and -C reuses the cache on every other shell start.
+_dotfiles_zcompdump="${ZDOTDIR:-$HOME}/.zcompdump"
+if [[ -n ${_dotfiles_zcompdump}(#qN.mh+24) || ! -s ${_dotfiles_zcompdump} ]]; then
+  compinit -d "$_dotfiles_zcompdump"
+else
+  compinit -C -d "$_dotfiles_zcompdump"
+fi
+unset _dotfiles_zcompdump
+
+zstyle ':completion:*' menu select
+# Lowercase input matches uppercase names, and a match may start mid-word.
+zstyle ':completion:*' matcher-list 'm:{a-z}={A-Za-z}' 'l:|=* r:|=*'
+zstyle ':completion:*' list-colors ${(s.:.)LS_COLORS}
+zstyle ':completion:*:descriptions' format '[%d]'
+zstyle ':completion:*' group-name ''
+ZSH

@@ -58,7 +58,9 @@ use `scripts/render-readme-catalog.py --check` to catch drift.
 | [dokploy](https://github.com/Dokploy/cli) | CLI | Linux / macOS | on | Dokploy panel CLI (449 OpenAPI-generated commands) plus `dok`, its per-VPS profile front end |
 | [jq](https://github.com/jqlang/jq) | CLI | Linux / macOS | on | Lightweight structural JSON querying, validation, filtering, and transformation |
 | [fribidi](https://github.com/fribidi/fribidi) | CLI | Linux / macOS | on | Arabic/Hebrew in a terminal with no bidi engine: `bidi` reorders and shapes RTL text |
+| [zsh-completion](https://zsh.sourceforge.io/Doc/Release/Completion-System.html) | CLI | Linux / macOS | on | zsh completion system (compinit) with cached dump, case-insensitive and mid-word matching |
 | [fzf](https://github.com/junegunn/fzf) | CLI | Linux / macOS | on | Interactive fuzzy finder with shell history, path selection, and completion bindings |
+| [fzf-tab](https://github.com/Aloxaf/fzf-tab) | CLI | darwin | on | Every zsh TAB becomes an fzf picker: paths, git refs, flags, processes, zoxide jumps |
 | [fd](https://github.com/sharkdp/fd) | CLI | Linux / macOS | on | Fast, user-friendly path search with Git-aware filtering and concise syntax |
 | [ripgrep](https://github.com/BurntSushi/ripgrep) | CLI | Linux / macOS | on | Fast recursive code search with Git-aware filtering and useful defaults |
 | [zoxide](https://github.com/ajeetdsouza/zoxide) | CLI | Linux / macOS | on | Smarter cd — jump to frequently used directories with z/zi |
