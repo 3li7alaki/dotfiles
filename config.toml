@@ -127,6 +127,37 @@ releases, or otherwise mutating GitHub requires authorization from the user's re
 Never print tokens or copy authentication material into repository files.
 """
 
+[tools.dokploy]
+enabled = true
+type    = "binary"
+bin     = "COMMAND:dokploy"
+install = "npm install -g @dokploy/cli && mkdir -p $HOME/.local/bin && ln -sfn $DOTFILES/scripts/dok $HOME/.local/bin/dok"
+verify_command = "dokploy --help >/dev/null 2>&1 && command -v dok >/dev/null 2>&1"
+auth_check = "dok >/dev/null 2>&1"
+auth_hint = "add a [vps.<name>] block with dokploy_url + dokploy_key to config.local.toml"
+homepage = "https://github.com/Dokploy/cli"
+desc    = "Dokploy panel CLI (449 OpenAPI-generated commands) plus `dok`, its per-VPS profile front end"
+agent_guidance = """
+`dok` is the profile-aware front end for the Dokploy CLI. Each VPS panel is a profile:
+`dok <profile> <group> <action> [flags]`, for example `dok <profile> project all --json`. Bare
+`dok` lists the profiles configured on this box, and the VPS fleet section above says what
+each box is for. `dok` resolves the panel URL from config and decrypts the profile's API key
+from pass directly into the child process, the same no-plaintext contract as `pass-env`.
+
+Never run `dokploy` directly, never run `dokploy auth` (it writes a single global config.json
+and defeats profiles), never set DOKPLOY_API_KEY by hand, and never read the key out of pass
+to paste it anywhere. The key must not reach output, logs, files, or shell history.
+
+Reading panel state is fine whenever it helps: `project all`, `application one`, service and
+domain listings, `--json` for anything you will parse. Creating, deploying, redeploying,
+stopping, restarting, or deleting an application, database, domain, or server is a change to
+a live production box and needs authorization from the user's request first.
+
+Discover the surface from the CLI itself (`dok <profile> --help`, then `<group> --help`)
+rather than a memorized command list: the commands are generated from Dokploy's OpenAPI spec
+and move with the server version.
+"""
+
 [tools.jq]
 enabled = true
 type    = "binary"

@@ -1,0 +1,69 @@
+#!/usr/bin/env python3
+"""Run the Dokploy CLI against a named VPS profile from config `[vps.*]`.
+
+The API key is decrypted from pass straight into the child environment: same contract as
+pass-env, no plaintext file, no argv, nothing printed.
+"""
+
+from __future__ import annotations
+
+import os
+import shutil
+import subprocess
+import sys
+import tomllib
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+def profiles() -> dict:
+    data = tomllib.loads((ROOT / "config.toml").read_text()).get("vps", {})
+    local = ROOT / "config.local.toml"
+    if local.exists():
+        for name, box in tomllib.loads(local.read_text()).get("vps", {}).items():
+            data.setdefault(name, {}).update(box)
+    return {name: box for name, box in data.items() if box.get("dokploy_url")}
+
+
+def listing(boxes: dict) -> int:
+    if not boxes:
+        print("no dokploy profiles: add a [vps.<name>] block to config.local.toml", file=sys.stderr)
+        return 1
+    print("usage: dok <profile> <group> <action> [flags]\n\nprofiles:")
+    for name, box in boxes.items():
+        detail = ", ".join(filter(None, [box.get("dokploy_url"), box.get("desc")]))
+        print(f"  {name:<12} {detail}")
+    return 0
+
+
+def main(argv: list[str]) -> int:
+    boxes = profiles()
+    if not argv or argv[0] in ("-h", "--help"):
+        return listing(boxes)
+
+    name, rest = argv[0], argv[1:]
+    box = boxes.get(name)
+    if box is None:
+        print(f"unknown dokploy profile: {name}", file=sys.stderr)
+        return listing(boxes) or 1
+    if not shutil.which("dokploy"):
+        print("dokploy CLI is not installed: npm install -g @dokploy/cli", file=sys.stderr)
+        return 1
+
+    entry = box.get("dokploy_key")
+    if not entry:
+        print(f"profile {name} has no dokploy_key (pass entry holding the API key)", file=sys.stderr)
+        return 1
+    key = subprocess.run(
+        ["pass", "show", entry], check=True, capture_output=True, text=True
+    ).stdout.splitlines()[0]
+
+    env = dict(os.environ, DOKPLOY_URL=box["dokploy_url"], DOKPLOY_API_KEY=key)
+    if box.get("dokploy_org"):
+        env["DOKPLOY_ORG_ID"] = box["dokploy_org"]
+    os.execvpe("dokploy", ["dokploy", *rest], env)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

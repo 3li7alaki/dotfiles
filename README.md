@@ -55,6 +55,7 @@ use `scripts/render-readme-catalog.py --check` to catch drift.
 | [herdr](https://github.com/herdrdev/herdr) | CLI | Linux / macOS | on | Agent-aware multiplexer: tmux's model plus per-pane agent state and a socket API |
 | [pass](https://www.passwordstore.org/) | CLI | Linux / macOS | on | GPG-encrypted local secret store with a no-plaintext-file environment launcher |
 | [github-cli](https://github.com/cli/cli) | CLI | Linux / macOS | on | Official GitHub CLI for pull requests, checks, issues, releases, and API access |
+| [dokploy](https://github.com/Dokploy/cli) | CLI | Linux / macOS | on | Dokploy panel CLI (449 OpenAPI-generated commands) plus `dok`, its per-VPS profile front end |
 | [jq](https://github.com/jqlang/jq) | CLI | Linux / macOS | on | Lightweight structural JSON querying, validation, filtering, and transformation |
 | [fribidi](https://github.com/fribidi/fribidi) | CLI | Linux / macOS | on | Arabic/Hebrew in a terminal with no bidi engine: `bidi` reorders and shapes RTL text |
 | [fzf](https://github.com/junegunn/fzf) | CLI | Linux / macOS | on | Interactive fuzzy finder with shell history, path selection, and completion bindings |

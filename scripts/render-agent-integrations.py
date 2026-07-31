@@ -75,6 +75,30 @@ conversation, harness and model selection, and diff review, including from the p
 herdr owns panes and agent state at the desk. The underlying Codex or Claude agent
 performs the Slay operations; T3 needs no plugin.""")
 
+    boxes = data.get("vps", {})
+    if boxes:
+        rows = []
+        for name, box in boxes.items():
+            facts = [f"ssh `{box['ssh']}`" if box.get("ssh") else None,
+                     f"panel `{box['dokploy_url']}`" if box.get("dokploy_url") else None,
+                     f"dokploy profile `{name}`" if box.get("dokploy_url") else None,
+                     f"org `{box['dokploy_org']}`" if box.get("dokploy_org") else None]
+            rows.append(f"- **{name}**: {box.get('desc', 'no description')}. "
+                        + ", ".join(f for f in facts if f) + ".")
+        sections.append("""## VPS fleet
+
+These are the boxes this machine already has access to. Do not ask the human which server
+something lives on when the description below answers it, and do not invent a host that is
+not listed.
+
+""" + "\n".join(rows) + """
+
+SSH aliases are configured in `~/.ssh/config`, so `ssh <alias>` works with no flags and no
+credentials to look up. Use SSH for what only the host can answer (systemd units, disk,
+docker state, logs outside the panel) and the Dokploy CLI for anything the panel owns:
+projects, applications, databases, domains, deployments. Both surfaces are live production.
+Read freely, and get authorization from the user's request before changing state.""")
+
     tool_sections = []
     for name, tool in data.get("tools", {}).items():
         guidance = tool.get("agent_guidance", "").strip()

@@ -52,6 +52,16 @@
 # [engines.glm]
 # active = false
 
+# The VPS fleet belongs here rather than in the public config.toml. Each entry becomes a
+# `dok` profile and a line in the rendered agent VPS-fleet briefing. `ssh` is an alias from
+# ~/.ssh/config; `dokploy_key` is a pass entry path, never a key:
+# [vps.example]
+# ssh         = "example"
+# desc        = "what this box is for, in the words you would use out loud"
+# dokploy_url = "https://panel.example.com"
+# dokploy_org = "org_id"                        # optional, exported as DOKPLOY_ORG_ID
+# dokploy_key = "example/dokploy/api-key"       # pass entry, decrypted per invocation
+
 # Whole entries can be ADDED per-box too — e.g. a skill symlinked to a project
 # checkout that only exists on this machine:
 # [skills.example-design-system]
