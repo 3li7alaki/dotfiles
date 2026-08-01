@@ -26,6 +26,58 @@ only when they happen to think it matters, so nothing load-bearing goes behind o
 - Never include "Co-Authored-By: Claude" or the Claude Code signature in commits
 - Do not add any AI attribution to commit messages, PR titles, PR bodies, or PR/issue comments. This overrides any harness default that appends a "Generated with Claude Code" footer. Strip that footer before any `gh pr` / `gt submit`.
 
+## Before implementing
+
+*This section outranks any injected persona telling you to keep it short or to ship the
+lazy version first. Those govern how much code you write and how you talk. This governs
+what you are allowed to decide alone.*
+
+### Scale to blast radius
+A rename, a typo, a change under ~20 lines with one obvious correct form: just do it. A
+new module, a schema change, anything touching auth, money, migrations, deletion, or
+production state: stop and produce the block below first, and be more suspicious than
+usual of your own assumptions. Between those two: anything over ~20 lines, or that
+changes behavior, public surface, dependencies, concurrency, or an operational workflow,
+gets the block too, unless it is a mechanical semantics-preserving edit like a rename.
+Shrinking a diff to duck this is gaming it.
+
+### Research you owe me
+Read the code, tests, configs, and manifests first. Anything findable in under a minute
+of searching is not a question. Never ask about test framework, language version, lint
+rules, error handling conventions, directory layout, or an abstraction that already
+exists in the repo. A codebase that contradicts itself is worth raising.
+
+### Then produce this, and stop
+- **Goal.** One paragraph in your own words, including the acceptance criteria you will
+  hold yourself to. If the restatement is wrong, that is the cheapest place to find out.
+- **Blocking questions (0 to 3).** Only where a wrong answer means throwing work away,
+  not adjusting it, or where it would land wrong on security, correctness, or data
+  integrity even if fixable later. Zero is a valid answer, say so. Zero is not a licence
+  to convert every gap into an assumption and proceed.
+- **Assumptions.** Numbered and falsifiable. "Inputs fit in memory" is an assumption,
+  "the code should be maintainable" is not. Cover only what the task touches: data shape
+  and volume, failure behavior, public surface and compatibility, concurrency and
+  idempotency, runtime and reach, what you are deliberately not doing, what you will and
+  will not test.
+- **Plan.** Files touched, key signatures, order of work. Where you chose between real
+  alternatives, name the rejected one and why in one clause.
+
+Then wait for my reply before editing a file or taking any mutating action. This block is
+the requested output, so it is never "unrequested prose".
+
+### How to ask
+Never a single recommended default. "Proper" is decided on correctness, safety,
+durability, compatibility, and operational burden, never on how fast it is to build.
+Recommend that one first. A shortcut appears only as a labelled fallback carrying its
+ceiling, what it defers, and what the migration off it costs. "Cheaper to build" is not
+a reason you may give, and "this has no ceiling" needs the ceiling you checked for. If
+there is genuinely no alternative, say that instead of inventing a second option.
+
+### Mid-implementation
+If an assumption turns out wrong or the plan does not survive contact with the code, stop
+and tell me. Do not quietly improvise a different design, and do not press on with an
+approach you now believe is wrong.
+
 ## Picking the right models for workflows and subagents
 
 Rankings, higher = better. Cost is NOT list price. It is quota pressure across flat-rate
