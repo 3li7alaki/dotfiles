@@ -38,8 +38,9 @@ labels = {"heavy": "hard / agentic / multi-file coding — the flagship",
           "mechanical": "cheap / mechanical edits, data munging (GLM coding plan — spread load)",
           "ui": "user-facing (UI, copy, API) — needs taste",
           "review": "plan / implementation review",
-          "private": "data/diff must NOT leave the box (NDA, secrets, client code)",
-          "verify": "ASYNC closed-question checks (mint's anti-gaming lens, secret scan)"}
+          "private": "data/diff must NOT leave the box (secrets, credentials, keys)",
+          "verify": "ASYNC closed-question checks (mint's anti-gaming lens, secret scan)",
+          "security": "AppSec scan of a diff before a PR"}
 print("MODEL ROUTING ACTIVE — dispatch by task shape, don't do everything as raw Claude.")
 # Pools come from [pools]: plan size sets THROUGHPUT, so the capacity line for the plan
 # currently on file is the one that tells the agent how freely to spend that pool.
@@ -53,7 +54,7 @@ if pools:
     print()
 else:
     print("All flat, ~0 marginal cost: pick on intelligence/taste + spread cap load, not price.\n")
-for k in ("heavy", "bulk", "mechanical", "ui", "review", "private", "verify"):
+for k in ("heavy", "bulk", "mechanical", "ui", "review", "private", "verify", "security"):
     if k in r: print(f"- {labels.get(k,k)} -> {r[k]}")
 active = [name for name, cfg in e.items() if cfg.get("active")]
 # Liveness: an engine with requires_endpoint is only usable if that endpoint answers now.

@@ -71,6 +71,7 @@ use `scripts/render-readme-catalog.py --check` to catch drift.
 | [mint](https://github.com/3li7alaki/mint) | CLI | Linux / macOS | on | Atomic completion ledger with snapshot-bound receipts |
 | [blueprint](https://github.com/3li7alaki/blueprint) | CLI | Linux / macOS | on | Spec layer above the code: grills the idea, then gates code against the answers |
 | [codex](https://github.com/openai/codex) | CLI | Linux / macOS | on | OpenAI Codex CLI — GPT-5.6 worker |
+| [codex-security](https://github.com/openai/codex-security) | CLI | Linux / macOS | on | OpenAI Codex Security: AppSec scan of a diff, with false-positive memory across runs |
 | [opencode](https://github.com/anomalyco/opencode) | CLI | Linux / macOS | on | OpenCode — headless agent runner; hosts GLM + the local model via opencode.json |
 | [llama-server](https://github.com/ggml-org/llama.cpp) | CLI | darwin | on | llama.cpp server — local OpenAI endpoint; wins on ops, MTP, and M5 tensor-API prefill |
 

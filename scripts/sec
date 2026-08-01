@@ -1,0 +1,124 @@
+#!/usr/bin/env python3
+"""Run OpenAI's Codex Security CLI with a tier, an effort, and a cost ceiling pinned.
+
+The raw CLI has no config file for defaults, and a bare `codex-security scan .` is
+gpt-5.6-sol at xhigh over the whole tree: an hour of wall clock and a serious dent in the
+weekly chatgpt cap, for a repository nobody asked to have scanned end to end. So the
+default here is the opposite: a diff, on the mid tier, under a ceiling.
+
+    sec                 committed changes vs the remote default branch
+    sec wip             staged + unstaged working tree
+    sec deep [path]     whole path on sol + xhigh, higher ceiling, deliberate, not routine
+    sec <anything else> passthrough (findings, scans compare, export, login, ...)
+
+Extra flags are appended after the defaults, so `sec --max-cost 5` overrides the ceiling
+without giving up the tier.
+"""
+
+from __future__ import annotations
+
+import os
+import shutil
+import subprocess
+import sys
+
+# Measured 2026-08-01 on this repo: a full-coverage working-tree scan of a 2-file diff cost
+# $2.57 and took 7m51s. Nearly all of that is the context pass, which reads the whole tree
+# and is NOT reused between runs, so the floor is per-scan and roughly independent of diff
+# size. $2 truncated a scan mid-flight; 4 clears the measured floor with room. The DEEP
+# ceiling is a guess, not a measurement: nothing has run sol at xhigh over a whole repo yet.
+CHEAP = ["--model", "gpt-5.6-terra", "--effort", "high", "--max-cost", "4"]
+DEEP = ["--model", "gpt-5.6-sol", "--effort", "xhigh", "--max-cost", "10"]
+
+
+def git(*args: str) -> str | None:
+    """Return stripped stdout, or None when git says no. Never raises."""
+    try:
+        out = subprocess.run(["git", *args], capture_output=True, text=True, check=True)
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return None
+    return out.stdout.strip() or None
+
+
+def base_ref() -> str | None:
+    """The merge base with the remote default branch.
+
+    Measured 2026-08-01: `--diff origin/main` is two-dot, so on a branch that has fallen
+    behind it hands the scanner main's own merged commits, inverted, as if the branch had
+    reverted them. Caught on barada, where a stale branch pulled in 4 unrelated files and
+    the report spent a phase on an open-redirect surface nobody had touched. Resolving the
+    merge base first is the three-dot answer, and it is what a PR review actually means.
+    """
+    head = git("rev-parse", "--abbrev-ref", "origin/HEAD")  # e.g. origin/main
+    ref = head if head and git("rev-parse", "--verify", "--quiet", head) else None
+    if ref is None:
+        for guess in ("origin/main", "origin/master"):
+            if git("rev-parse", "--verify", "--quiet", guess):
+                ref = guess
+                break
+    if ref is None:
+        return None
+    return git("merge-base", ref, "HEAD") or ref
+
+
+def plan(argv: list[str], base: str | None) -> list[str] | str:
+    """Argv for codex-security, or an error string. Pure, so --self-test can check it."""
+    verb = argv[0] if argv else ""
+    rest = argv[1:]
+
+    if verb == "scan":
+        # Passing `scan` through would hand back the sol/xhigh whole-tree default this
+        # wrapper exists to prevent. Name the three modes instead of silently re-pinning.
+        return ("`sec scan` is not passed through. Use `sec` (diff), `sec wip`, or `sec deep [path]`.\n"
+                "Really want the raw CLI? Call `codex-security scan` and pin "
+                "--model/--effort/--max-cost yourself.")
+    if verb == "wip":
+        return ["scan", "--working-tree", *CHEAP, *rest]
+    if verb == "deep":
+        targeted = bool(rest) and not rest[0].startswith("-")
+        path = rest[0] if targeted else "."
+        return ["scan", "--path", path, *DEEP, *(rest[1:] if targeted else rest)]
+    if not argv or verb.startswith("-"):
+        if base is None:
+            return ("no remote default branch found. Use `sec wip` for the working tree, "
+                    "or `sec deep .` for the whole repository.")
+        return ["scan", "--diff", base, *CHEAP, *argv]
+    # findings / scans / export / validate / patch / login: nothing to pin, hand it over.
+    return argv
+
+
+def self_test() -> int:
+    assert plan([], "origin/main")[:4] == ["scan", "--diff", "origin/main", "--model"]
+    assert "gpt-5.6-terra" in plan([], "origin/main")
+    assert plan(["wip"], None)[:2] == ["scan", "--working-tree"]
+    assert plan(["deep"], None) == ["scan", "--path", ".", *DEEP]
+    assert plan(["deep", "src"], None)[:3] == ["scan", "--path", "src"]
+    assert plan(["deep", "--json"], None) == ["scan", "--path", ".", *DEEP, "--json"]
+    # A later flag must win, so `sec --max-cost 5` raises the ceiling without losing the tier.
+    assert plan(["--max-cost", "5"], "origin/main")[-2:] == ["--max-cost", "5"]
+    assert plan(["findings"], None) == ["findings"]         # passthrough, no defaults injected
+    assert isinstance(plan(["scan", "."], "origin/main"), str)   # the expensive default stays blocked
+    assert isinstance(plan([], None), str)                  # no base ref is an error, not a repo-wide scan
+    print("ok")
+    return 0
+
+
+def main(argv: list[str]) -> int:
+    if argv and argv[0] == "--self-test":
+        return self_test()
+    if not shutil.which("codex-security"):
+        print("codex-security not installed: npm install -g @openai/codex-security", file=sys.stderr)
+        return 1
+    if argv and argv[0] in ("-h", "--help"):
+        print(__doc__.strip())
+        return 0
+
+    args = plan(argv, base_ref())
+    if isinstance(args, str):
+        print(args, file=sys.stderr)
+        return 2
+    os.execvp("codex-security", ["codex-security", *args])
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

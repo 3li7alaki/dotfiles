@@ -357,6 +357,53 @@ default_model = "gpt-5.6-sol"                        # setup ensures this key; -
 homepage = "https://github.com/openai/codex"
 desc    = "OpenAI Codex CLI — GPT-5.6 worker"
 
+[tools.codex-security]
+enabled = true               # needs codex/GPT access; a box without it sets false in config.local.toml
+type    = "binary"
+# The CLI has NO config file for defaults (only CODEX_SECURITY_STATE_DIR + auth env), and a
+# bare `codex-security scan .` is gpt-5.6-sol at xhigh over the whole tree. That is the run
+# that ate half a weekly quota for people on HN. So the tool is installed but the WRAPPER is
+# what goes on PATH: `sec` pins the tier, the effort, and a cost ceiling, and reaching sol
+# requires typing `deep`. Same shape as [tools.dokploy] wrapping the raw dokploy CLI.
+install = "npm install -g @openai/codex-security && mkdir -p $HOME/.local/bin && ln -sfn $DOTFILES/scripts/sec $HOME/.local/bin/sec"
+bin     = "COMMAND:codex-security"
+verify_command = "command -v codex-security >/dev/null 2>&1 && command -v sec >/dev/null 2>&1"
+auth_check = "codex-security scans list >/dev/null 2>&1"
+auth_hint  = "codex-security not authenticated. Run: codex-security login"
+homepage = "https://github.com/openai/codex-security"
+desc    = "OpenAI Codex Security: AppSec scan of a diff, with false-positive memory across runs"
+agent_guidance = """
+`sec` is the front end for OpenAI's Codex Security CLI, and it exists because the raw CLI
+defaults to gpt-5.6-sol at xhigh over the whole repository. Never call `codex-security`
+directly. `sec` pins gpt-5.6-terra at high effort with a cost ceiling and scans a diff:
+
+    sec                 # committed changes vs origin/main
+    sec wip             # staged + unstaged working tree
+    sec deep [path]     # whole path, sol + xhigh, higher ceiling, deliberate, never routine
+
+Unknown arguments pass through, so `sec findings`, `sec scans compare`, and `sec export
+--export-format sarif` all reach the real CLI.
+
+This is the `security` routing lane, and it deliberately does not run on the claude pool:
+security review is not a taste job, and claude is the tightest cap on the box. Run it on a
+diff before a PR when the change touches auth, money, deserialization, file paths, shell
+execution, SQL, or anything network-facing. On high stakes add opus-5 as a second lens
+rather than escalating this one, because a second vendor sees different failures.
+
+Two properties matter more than the findings. `findings --false-positive` makes a dismissal
+stick, so run N+1 reports only what is new or reopened instead of re-triaging old noise, and
+`scans compare` shows what a change actually introduced. Preserve that state: never delete
+the scan history to "start clean", and never pass --output-dir unless the results are meant
+to be throwaway.
+
+Client source is fine to scan (it already rides this pool). Secrets, credentials, and .env
+files are the `private` lane and must not be sent anywhere, so do not aim a scan at them.
+
+This is 0.1.x: a scan cannot resume, a rate limit can kill it mid-run, and --max-cost is an
+estimate rather than a hard cap. Treat every result as advisory. Do not wire it into a git
+hook, CI, or a mint gate until it proves it can finish a scan reliably.
+"""
+
 [tools.opencode]
 enabled = true
 type    = "binary"           # headless worker chassis for API-only models (GLM + local)
@@ -695,8 +742,13 @@ heavy      = "gpt-5.6-sol"     # hard / agentic / multi-file — the flagship co
 mechanical = "glm"             # trivial edits, data munging — GLM coding plan (flat), spreads load off GPT/Claude
 ui         = "opus-5"          # anything user-facing (taste ≥ 7), Max-flat
 review     = "opus-5"          # plan/impl review — add sol as cross-vendor 2nd on high stakes
-private    = "local"           # diff//data must NOT leave the box (NDA, secrets, client code) — cloud is not an option at any price
+private    = "local"           # secrets, credentials, keys, .env, anything that grants access. Cloud is not an option at any price
+# NB: client source is NOT `private`. ha10 client work already rides the chatgpt pool
+# (OpenAI is the vendor of record for that code), so this lane means material that would
+# be a breach to disclose, not merely code someone else pays for. Narrowed 2026-08-01:
+# the old wording said "client code" and every session read a rule nobody follows.
 verify     = "local, else gpt-5.6-luna at effort=none"   # ASYNC closed-question checks: mint's anti-gaming lens, secret scan. Never interactive. Luna stands in whenever local is down, and this is the one lane where its `none` floor is the right setting: a closed question needs no reasoning.
+security   = "sec (codex-security on the diff, chatgpt pool)"   # AppSec scan of a diff. Deliberately OFF the claude pool: security review is not a taste job, and claude is the tightest cap. Add opus-5 as a second lens on high stakes; `sec` never runs bare (see [tools.codex-security]).
 # Degrade by hopping POOLS, never by walking siblings inside the pool that just 429'd:
 # a Codex 429 is usually the weekly cap, so terra is dead the moment sol is. Skip the
 # failed pool entirely; terra sits last only for the rarer per-model window limit.
