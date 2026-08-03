@@ -29,6 +29,7 @@ export PATH="$HOME/.local/bin:$PATH"
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 SCRUBBER="$SCRIPT_DIR/scrub-transcripts.py"
+AGENTS_MD="${AGENTS_MD:-$(dirname "$SCRIPT_DIR")/AGENTS.md}"
 
 PROJECTS="${CLAUDE_PROJECTS:-$HOME/.claude/projects}"
 STATE="${XDG_STATE_HOME:-$HOME/.local/state}/distill-memory"
@@ -177,17 +178,28 @@ promote() {
 }
 
 write_staging() {
-  local scope="$1" rows="$2" out slug n kept=0
+  local scope="$1" rows="$2" out slug n kept=0 g=0
   [ -n "$rows" ] || return 0
   out="$STATE/candidates-$scope.md"
+  [ "$scope" = global ] && g=1
 
+  # A global rule is accepted as literal text in AGENTS.md, not as a memory file. Two reasons,
+  # and the first is fatal on its own: a per-project memory directory keyed on $HOME loads in
+  # no repository session, so the path this used to name was somewhere a rule went to die.
+  # Second, AGENTS.md is the only one of these files Codex, opencode and Cursor read, and it
+  # says itself that a rule which must hold has to be literal there rather than behind an
+  # import. Project rules keep the memory-file form: that scope is Claude's and the harness
+  # loads it. The block emitted below follows the destination, so nothing has to be restripped.
   {
     echo "# Memory candidates: $scope"
     echo
-    echo "Seen in $MIN_SESSIONS or more distinct sessions. Accept one by writing it as a file in"
-    if [ "$scope" = global ]; then
-      echo "\`$PROJECTS/-Users-3li/memory/\`, then adding its pointer line to MEMORY.md."
+    echo "Seen in $MIN_SESSIONS or more distinct sessions."
+    if [ "$g" = 1 ]; then
+      echo "Accept one by adding its line as literal text under the right section of"
+      echo "\`$AGENTS_MD\`. Drop any rule already stated there; the recurrence count only means"
+      echo "the rule is real, not that it is missing."
     else
+      echo "Accept one by writing it as a file in"
       echo "\`$PROJECTS/$scope/memory/\`, then adding its pointer line to MEMORY.md."
     fi
     echo
@@ -199,8 +211,16 @@ write_staging() {
     [ "$n" -ge "$MIN_SESSIONS" ] || continue
     kept=$((kept + 1))
     # One block per slug, from its first sighting; the later restatements add only count.
-    printf '%s\n' "$rows" | jq -sr --arg s "$slug" --arg n "$n" '
-      map(select(.slug == $s)) | .[0] | [
+    printf '%s\n' "$rows" | jq -sr --arg s "$slug" --arg n "$n" --arg g "$g" '
+      map(select(.slug == $s)) | .[0] |
+      (if $g == "1" then [
+        "## \(.slug)  (\($n) sessions)",
+        "",
+        "- \(.claim)",
+        (if .why == "" then empty else "  Why: \(.why)" end),
+        "  Apply: \(.apply)",
+        ""
+      ] else [
         "## \(.slug)  (\($n) sessions)",
         "",
         "```markdown",
@@ -217,7 +237,7 @@ write_staging() {
         "**How to apply:** \(.apply)",
         "```",
         ""
-      ] | join("\n")' >>"$out"
+      ] end) | join("\n")' >>"$out"
   done < <(printf '%s\n' "$rows" | jq -r .slug | sort -u)
 
   echo "  $scope: $kept candidate(s) -> $out"
