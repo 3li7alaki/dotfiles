@@ -12,6 +12,10 @@ to still parse as JSON. Back the directory up first; there is no undo here.
 Precision beats coverage. A false positive silently corrupts real conversation history,
 so placeholders, shell variable references, and template markers are deliberately kept:
 redacting "your_api_key_here" gains nothing and destroys the sentence around it.
+
+`--filter` inverts that trade. It reads stdin and writes stdout, for callers that ship
+transcript text off the box (distill-memory.sh), where a miss is a leak and an over-redaction
+costs nothing. Same patterns, plus the egress-only rules below.
 """
 
 import argparse
@@ -122,6 +126,39 @@ def scrub_line(line: str, counts: Counter) -> str:
     return ASSIGN.sub(assign_sub, line)
 
 
+# Egress-only rules, used by --filter and never by the in-place pass. Both are deliberately
+# over-eager, which is correct in one direction and wrong in the other: text on its way to an
+# external model loses nothing by shedding a git SHA, while the same rule rewriting a stored
+# transcript would corrupt real content for no gain.
+HEX_BLOB = re.compile(r"[a-fA-F0-9]{32,}")
+# Lowercase `api_key = ...` is prose, not an env var, so the uppercase-anchored ASSIGN above
+# skips it on purpose. Off the box that is a leak, so egress re-runs the same rule case-blind.
+ASSIGN_ANYCASE = re.compile(ASSIGN.pattern, re.IGNORECASE)
+
+
+def scrub_stream(text: str, counts: Counter) -> str:
+    """Whole-buffer scrub for text leaving the box. Not line by line: the caller feeds us
+    `jq -r` output, which has already turned a transcript's \\n escapes into real newlines,
+    so a PEM body arrives split across physical lines and a per-line pass sees only its
+    header. Every pattern's value class excludes whitespace, so nothing else spans lines."""
+    text = scrub_line(text, counts)
+
+    text, n = HEX_BLOB.subn(MASK, text)
+    if n:
+        counts["hex-blob"] += n
+
+    def anycase_sub(m: re.Match) -> str:
+        name = m.group(1).strip().rstrip("=:\"'\\ ")
+        # Same denylist as the uppercase pass, or this undoes it: scrub_line deliberately
+        # leaves PASSWORD_STORE_DIR alone and a case-blind rerun would redact it anyway.
+        if NAME_DENY.search(name.upper()) or is_placeholder(m.group(2)):
+            return m.group(0)
+        counts["assignment-anycase"] += 1
+        return m.group(1) + MASK
+
+    return ASSIGN_ANYCASE.sub(anycase_sub, text)
+
+
 def process(path: pathlib.Path, apply: bool, counts: Counter) -> int:
     """Returns the number of lines changed. Writes only when apply and nothing broke."""
     try:
@@ -187,6 +224,28 @@ def self_check() -> int:
         pem = f"-----BEGIN RSA PRIVATE KEY-----{esc}MIIEabc123{esc}-----END RSA PRIVATE KEY-----"
         assert "MIIEabc123" not in scrub_line(pem, _C()), f"PEM body survived at escape {esc!r}"
 
+    # Egress mode. A PEM split across real newlines is the shape the shell's line-based sed
+    # could not see, and is what shipped a key body to an external model. The rule handles it
+    # only because it is applied to the whole buffer at once, which is what scrub_stream is
+    # for and what process() deliberately is not.
+    multiline_pem = ("-----BEGIN RSA PRIVATE KEY-----\n"
+                     "MIIEabc123\nZZZbodyline\n"
+                     "-----END RSA PRIVATE KEY-----")
+    assert "MIIEabc123" not in scrub_stream(multiline_pem, _C()), "multiline PEM body survived"
+    assert "ZZZbodyline" not in scrub_stream(multiline_pem, _C()), "multiline PEM body survived"
+
+    # The two rules the shell scrubber carried before it delegated here, both egress-only.
+    assert MASK in scrub_stream("the api_key = hunter2supersecret must not leave", _C())
+    assert MASK in scrub_stream("deploy 08dabd5345b37fffcbe335bd578b15a0 to staging", _C())
+    for inplace_only in ["deploy 08dabd5345b37fffcbe335bd578b15a0 to staging",
+                         "the api_key = hunter2supersecret must not leave"]:
+        assert scrub_line(inplace_only, _C()) == inplace_only, \
+            f"egress rule leaked into the in-place pass: {inplace_only}"
+
+    # The denylist has to survive the case-blind rerun, not get undone by it.
+    keep = "PASSWORD_STORE_DIR=/home/u/.password-store"
+    assert scrub_stream(keep, _C()) == keep, "anycase pass over-redacted a denylisted name"
+
     # A long secret-ish name with no delimiter must not blow up the matcher.
     start = time.monotonic()
     scrub_line("SECRET" + "_ABCDEFGH" * 4000, _C())
@@ -211,10 +270,16 @@ def main() -> int:
     ap.add_argument("root", nargs="?", default=str(pathlib.Path.home() / ".claude" / "projects"))
     ap.add_argument("--apply", action="store_true", help="write changes (default is a dry run)")
     ap.add_argument("--self-check", action="store_true", help="run assertions and exit")
+    ap.add_argument("--filter", action="store_true",
+                    help="scrub stdin to stdout for egress, with the over-eager extra rules")
     args = ap.parse_args()
 
     if args.self_check:
         return self_check()
+
+    if args.filter:
+        sys.stdout.write(scrub_stream(sys.stdin.read(), Counter()))
+        return 0
 
     root = pathlib.Path(args.root)
     if not root.is_dir():

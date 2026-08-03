@@ -27,6 +27,9 @@
 set -uo pipefail
 export PATH="$HOME/.local/bin:$PATH"
 
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+SCRUBBER="$SCRIPT_DIR/scrub-transcripts.py"
+
 PROJECTS="${CLAUDE_PROJECTS:-$HOME/.claude/projects}"
 STATE="${XDG_STATE_HOME:-$HOME/.local/state}/distill-memory"
 SEEN="$STATE/seen.txt"
@@ -53,19 +56,17 @@ extract() {
 }
 
 # Trust boundary: transcripts leave the box for the distill call, so anything shaped like a
-# credential is redacted first. Coarse on purpose, and deliberately over-eager: the last rule
-# eats git SHAs and DNS validation records along with real secrets, which costs nothing here
-# because a distilled RULE never needs a hex blob. Audited against 3.4MB of real L1 output.
+# credential is redacted first. The patterns are NOT duplicated here. They live in
+# scrub-transcripts.py, whose --filter mode adds the over-eager egress rules on top, and the
+# second copy that used to sit here is precisely what shipped a live PEM body to the model:
+# the whole-block fix landed in the Python file and never reached this sed.
+# Line-based tools are the wrong shape for this anyway. jq -r has already turned the
+# transcript's \n escapes into real newlines by the time we see the text, so a PEM arrives
+# split across physical lines and sed can only ever match its header.
 # ponytail: shape-matching only. A secret with no keyword and no recognizable prefix (a bare
 # base64 blob, say) still gets through. Add a local-model secret pass if that ever bites.
 scrub() {
-  sed -E \
-    -e 's/(sk|pk|ghp|gho|ghu|ghs|ghr|xox[abps])-[A-Za-z0-9_-]{16,}/[REDACTED]/g' \
-    -e 's/(AKIA|ASIA)[A-Z0-9]{12,}/[REDACTED]/g' \
-    -e 's/eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/[REDACTED]/g' \
-    -e 's/-----BEGIN [A-Z ]*PRIVATE KEY-----/[REDACTED]/g' \
-    -e 's/([Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd]|[Ss][Ee][Cc][Rr][Ee][Tt]|[Tt][Oo][Kk][Ee][Nn]|[Aa][Pp][Ii][ _-]?[Kk][Ee][Yy])([\"'"'"']?[[:space:]]*[:=][[:space:]]*[\"'"'"']?)[^[:space:]\"'"'"']{8,}/\1\2[REDACTED]/g' \
-    -e 's/[a-fA-F0-9]{32,}/[REDACTED]/g'
+  python3 "$SCRUBBER" --filter
 }
 
 DISTILL_PROMPT=$(cat <<'EOF'
@@ -235,11 +236,12 @@ self_check() {
 {"type":"assistant","isSidechain":false,"message":{"content":"my own reply"}}
 {"type":"user","isSidechain":false,"message":{"content":"the api_key = hunter2supersecret must not leave the box"}}
 {"type":"user","isSidechain":false,"message":{"content":"deploy the commit 08dabd5345b37fffcbe335bd578b15a0 to staging please"}}
+{"type":"user","isSidechain":false,"message":{"content":"here is the key -----BEGIN RSA PRIVATE KEY-----\nMIIEbodyzz9\nQQQsecondline\n-----END RSA PRIVATE KEY----- please keep it"}}
 EOF
   out=$(extract "$fix")
   rm -f "$fix"
 
-  [ "$(printf '%s\n' "$out" | grep -c .)" -eq 3 ] || { echo "FAIL: expected 3 kept lines, got: $out"; return 1; }
+  [ "$(printf '%s\n' "$out" | grep -c .)" -eq 4 ] || { echo "FAIL: expected 4 kept lines, got: $out"; return 1; }
   printf '%s' "$out" | grep -q 'always run the tests'   || { echo "FAIL: dropped a real prompt"; return 1; }
   printf '%s' "$out" | grep -q 'subagent chatter'       && { echo "FAIL: kept a sidechain"; return 1; }
   printf '%s' "$out" | grep -q 'tool output'            && { echo "FAIL: kept a tool result"; return 1; }
@@ -247,6 +249,8 @@ EOF
   printf '%s' "$out" | grep -q 'my own reply'           && { echo "FAIL: kept an assistant turn"; return 1; }
   printf '%s' "$out" | grep -q 'hunter2supersecret'     && { echo "FAIL: leaked a secret past scrub"; return 1; }
   printf '%s' "$out" | grep -q '08dabd5345b37fff'       && { echo "FAIL: leaked a bare hex blob past scrub"; return 1; }
+  printf '%s' "$out" | grep -q 'MIIEbodyzz9'            && { echo "FAIL: leaked a PEM key body past scrub"; return 1; }
+  printf '%s' "$out" | grep -q 'QQQsecondline'          && { echo "FAIL: leaked a PEM key body past scrub"; return 1; }
   printf '%s' "$out" | grep -q 'REDACTED'               || { echo "FAIL: scrub did not redact"; return 1; }
 
   echo "self-check ok"
@@ -261,8 +265,12 @@ case "${1:-}" in
   --backfill)   BATCH=100000 ;;
 esac
 
-command -v jq    >/dev/null || { echo "jq not on PATH, skipping"; exit 0; }
-command -v codex >/dev/null || { echo "codex not on PATH, skipping"; exit 0; }
+command -v jq      >/dev/null || { echo "jq not on PATH, skipping"; exit 0; }
+command -v codex   >/dev/null || { echo "codex not on PATH, skipping"; exit 0; }
+# Not "skipping": python3 IS the scrubber, so a missing one means the next distill call ships
+# unredacted transcripts to the model. Refuse the run instead.
+command -v python3 >/dev/null || { echo "python3 missing, refusing to distill unscrubbed"; exit 1; }
+[ -r "$SCRUBBER" ]            || { echo "scrubber missing at $SCRUBBER, refusing to distill"; exit 1; }
 
 self_check >/dev/null || { echo "extractor self-check failed, refusing to run"; exit 1; }
 
