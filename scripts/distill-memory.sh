@@ -29,6 +29,7 @@ export PATH="$HOME/.local/bin:$PATH"
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 SCRUBBER="$SCRIPT_DIR/scrub-transcripts.py"
+SLUGMERGE="$SCRIPT_DIR/slug-merge.py"
 AGENTS_MD="${AGENTS_MD:-$(dirname "$SCRIPT_DIR")/AGENTS.md}"
 
 PROJECTS="${CLAUDE_PROJECTS:-$HOME/.claude/projects}"
@@ -36,6 +37,7 @@ STATE="${XDG_STATE_HOME:-$HOME/.local/state}/distill-memory"
 SEEN="$STATE/seen.txt"
 CANDIDATES="$STATE/candidates.jsonl"
 SLUGMAP="$STATE/slug-map.json"
+ROUND="$STATE/merge-round.jsonl"    # last round's raw groupings, kept for diagnosis
 BATCH="${BATCH:-40}"          # sessions distilled per run; weekly cron drains the backlog
 MIN_CHARS=1500                # below this a session has no rule worth extracting
 MAX_CHARS=60000               # ponytail: hard truncation per session, raise if tails matter
@@ -152,11 +154,15 @@ merge() {
         | codex exec -s read-only --skip-git-repo-check \
             -c model=gpt-5.6-luna -c model_reasoning_effort="high" - 2>/dev/null)
 
+  # Keep the round's groupings, drop its choice of canonical. slug-merge.py unions this round
+  # into the map already on disk and elects the canonical itself; the header there says why.
+  # This used to write $SLUGMAP directly, which meant a round that returned nothing wiped the
+  # accumulated map to {}. Now a dead round is simply a round that adds no edges.
   printf '%s\n' "$out" \
-    | jq -c 'select(type == "object" and .canonical and (.aliases | type == "array"))' 2>/dev/null \
-    | jq -s 'map(.canonical as $c | .aliases[] | {(.): $c}) | add // {}' >"$SLUGMAP"
+    | jq -c 'select(type == "object" and .canonical and (.aliases | type == "array"))' \
+      >"$ROUND" 2>/dev/null
 
-  echo "  merged $(jq -r 'length' "$SLUGMAP") alias(es) into canonical slugs"
+  python3 "$SLUGMERGE" "$CANDIDATES" "$SLUGMAP" "$ROUND"
 }
 
 # ── L3: promote what recurs, into a staging file per scope ───────────────────
@@ -273,6 +279,11 @@ EOF
   printf '%s' "$out" | grep -q 'QQQsecondline'          && { echo "FAIL: leaked a PEM key body past scrub"; return 1; }
   printf '%s' "$out" | grep -q 'REDACTED'               || { echo "FAIL: scrub did not redact"; return 1; }
 
+  # The two helpers this script delegates to carry their own assertions. Run them here so one
+  # command still answers "is the whole pipeline sound", scrubber and slug election included.
+  python3 "$SCRUBBER"  --self-check >/dev/null || { echo "FAIL: scrubber self-check"; return 1; }
+  python3 "$SLUGMERGE" --self-check >/dev/null || { echo "FAIL: slug-merge self-check"; return 1; }
+
   echo "self-check ok"
 }
 
@@ -291,6 +302,7 @@ command -v codex   >/dev/null || { echo "codex not on PATH, skipping"; exit 0; }
 # unredacted transcripts to the model. Refuse the run instead.
 command -v python3 >/dev/null || { echo "python3 missing, refusing to distill unscrubbed"; exit 1; }
 [ -r "$SCRUBBER" ]            || { echo "scrubber missing at $SCRUBBER, refusing to distill"; exit 1; }
+[ -r "$SLUGMERGE" ]           || { echo "slug-merge missing at $SLUGMERGE, refusing to distill"; exit 1; }
 
 self_check >/dev/null || { echo "extractor self-check failed, refusing to run"; exit 1; }
 
