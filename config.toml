@@ -694,6 +694,30 @@ schedule = "0 4 * * 0"                              # Sundays 04:00
 script   = "DOTFILES/scripts/update-tools.sh"       # brew upgrade + re-run installers
 desc     = "Weekly tool auto-update (latest binaries)"
 
+# Memory distillation. A memory file only exists today if someone thinks to write it
+# mid-session, so a rule stated four times across four sessions is recorded nowhere. This
+# reads the transcripts Claude Code already writes to ~/.claude/projects (no capture hook
+# needed, the data is on disk), distills each session's typed prompts into normalized rules,
+# and promotes only what recurs across 2+ distinct sessions. One occurrence is noise.
+#
+# Why cron and not a hook: the recurrence threshold is the whole value, and a session-end
+# hook only ever sees one session. Why luna and not claude: this is bulk reading of ~3.4MB
+# of prompt history, exactly the load that starves the claude cap for taste and review work.
+#
+# It NEVER writes into a memory/ directory. Output is a staging file under ~/.local/state/
+# that you accept from by hand. A pass that writes its own behavioral rules and then reads
+# them back next session is grading its own homework.
+#
+# Transcripts leave the box for the distill call, so the extractor redacts credential-shaped
+# strings first (audited against real history: it fires on live Resend/Linear/Postgres/OAuth
+# material sitting in old sessions). Batched at 40 sessions per run; the weekly tick drains a
+# backlog on its own, or force it with `distill-memory.sh --backfill`.
+[cron.distill-memory]
+enabled  = true
+schedule = "0 5 * * 0"                              # Sundays 05:00, after the other two
+script   = "DOTFILES/scripts/distill-memory.sh"     # staging under ~/.local/state/distill-memory/
+desc     = "Weekly memory distillation: promotes repeated guidance into candidate memories"
+
 # ── Model routing (dispatch guidance for the agent; NO worker loop) ───────────
 # Static task-shape → model rules + a fallback order. There is NO daemon parsing
 # this — the [routing]/[engines] tables are rendered into the agent's attention

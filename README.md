@@ -127,6 +127,7 @@ use `scripts/render-readme-catalog.py --check` to catch drift.
 | local-model | User daemon (darwin) | on | Local model endpoint (llama.cpp) — idle-unloads so it costs no RAM at rest |
 | revise-claude-md | Scheduled task | on | Weekly CLAUDE.md hygiene across ~/Projects repos |
 | update-tools | Scheduled task | on | Weekly tool auto-update (latest binaries) |
+| distill-memory | Scheduled task | on | Weekly memory distillation: promotes repeated guidance into candidate memories |
 
 <!-- catalog:end -->
 
