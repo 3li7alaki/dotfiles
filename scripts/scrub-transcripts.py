@@ -15,7 +15,9 @@ redacting "your_api_key_here" gains nothing and destroys the sentence around it.
 """
 
 import argparse
+import contextlib
 import json
+import os
 import pathlib
 import re
 import sys
@@ -27,6 +29,9 @@ MASK = "[REDACTED]"
 VENDOR = [
     ("linear",        re.compile(r"\blin_api_[A-Za-z0-9]{32,}")),
     ("github",        re.compile(r"\bgh[pousr]_[A-Za-z0-9]{36,}")),
+    ("github-pat",    re.compile(r"\bgithub_pat_[A-Za-z0-9_]{20,}")),
+    ("slack-app",     re.compile(r"\bxapp-[0-9]-[A-Za-z0-9-]{16,}")),
+    ("stripe-whsec",  re.compile(r"\bwhsec_[A-Za-z0-9]{16,}")),
     ("aws-key-id",    re.compile(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b")),
     ("resend",        re.compile(r"\bre_[A-Za-z0-9]{8,}_[A-Za-z0-9]{16,}")),
     ("openai",        re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9_-]{32,}")),
@@ -58,9 +63,13 @@ DSN = re.compile(r"\b((?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|amqp)://[
 # The quote groups are `(?:\\?["'])?`, never a bare optional backslash: transcripts are JSON,
 # so a lone `\` is the head of an escape. Letting it be consumed made an empty NAME= match the
 # `\n` and swallow the following line as its "value", which the JSON guard caught.
+# The name is wrapped in an atomic group and its filler runs are bounded. Unbounded
+# `[A-Z0-9_]*` on both sides of the alternation backtracks super-linearly against a long
+# run of uppercase and underscores that never reaches a delimiter, and transcript lines
+# run to tens of kilobytes, so that is a hang on real input rather than a theoretical one.
 ASSIGN = re.compile(
-    r"((?:[A-Z0-9_]*(?:SECRET|PASSWORD|API_?KEY|ACCESS_TOKEN|AUTH_TOKEN|PRIVATE_KEY)[A-Z0-9_]*)"
-    r"(?:\\?[\"'])?\s*[:=]\s*(?:\\?[\"'])?)"
+    r"((?>[A-Z0-9_]{0,40}(?:SECRET|PASSWORD|API_?KEY|ACCESS_TOKEN|AUTH_TOKEN|PRIVATE_KEY)[A-Z0-9_]{0,40})"
+    r"(?:\\?[\"'])?[ \t]*[:=][ \t]*(?:\\?[\"'])?)"
     r"([^\s\"'\\,;)}]{8,})"
 )
 
@@ -138,17 +147,74 @@ def process(path: pathlib.Path, apply: bool, counts: Counter) -> int:
         out.append(scrubbed)
 
     if changed and apply:
-        tmp = path.with_suffix(path.suffix + ".scrubtmp")
-        tmp.write_text("".join(out), encoding="utf-8", errors="surrogateescape")
-        tmp.replace(path)
+        # mkstemp, not a deterministic ".scrubtmp": it opens O_CREAT|O_EXCL|O_WRONLY at 0600,
+        # so a pre-planted symlink at a guessable path cannot redirect the write, and the
+        # window never exposes transcript content at the umask default. Then copy the
+        # original mode across, because transcripts are 0600 and a fresh file must not
+        # silently widen them.
+        import tempfile
+        mode = path.stat().st_mode & 0o777
+        fd, tmpname = tempfile.mkstemp(dir=path.parent, prefix=".scrub-", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8", errors="surrogateescape") as fh:
+                fh.write("".join(out))
+            os.chmod(tmpname, mode)
+            os.replace(tmpname, path)
+        except BaseException:
+            with contextlib.suppress(OSError):
+                os.unlink(tmpname)
+            raise
     return changed
+
+
+def self_check() -> int:
+    """Covers the failure modes an AppSec pass found, so they cannot silently return."""
+    import tempfile as _tf, time
+    from collections import Counter as _C
+
+    # Vendor formats, including the four a first version missed.
+    for token in ["github_pat_" + "A" * 24, "xapp-1-" + "A" * 20, "whsec_" + "A" * 20,
+                  "lin_api_" + "b" * 40, "ghp_" + "c" * 40, "AKIA" + "B" * 16]:
+        assert MASK in scrub_line(f"KEY={token}", _C()), f"missed vendor token: {token[:12]}"
+
+    # Placeholders and non-credential names survive untouched.
+    for keep in ['API_KEY="your_api_key_here"', "PASSWORD_STORE_DIR=/home/u/.password-store",
+                 "SECURITY_PASSWORD_CHANGED=some_event_name", "SECRET=$MY_VAR"]:
+        assert scrub_line(keep, _C()) == keep, f"over-redacted: {keep}"
+
+    # Whole PEM block goes, at any escape depth, not just its header.
+    for esc in ["\\n", "\\\\n"]:
+        pem = f"-----BEGIN RSA PRIVATE KEY-----{esc}MIIEabc123{esc}-----END RSA PRIVATE KEY-----"
+        assert "MIIEabc123" not in scrub_line(pem, _C()), f"PEM body survived at escape {esc!r}"
+
+    # A long secret-ish name with no delimiter must not blow up the matcher.
+    start = time.monotonic()
+    scrub_line("SECRET" + "_ABCDEFGH" * 4000, _C())
+    assert time.monotonic() - start < 1.0, "ASSIGN regex backtracks super-linearly"
+
+    # Applying preserves the original mode instead of writing at the umask default.
+    with _tf.TemporaryDirectory() as d:
+        f = pathlib.Path(d) / "t.jsonl"
+        f.write_text('{"a":"AKIA' + "B" * 16 + '"}\n')
+        os.chmod(f, 0o600)
+        assert process(f, True, _C()) == 1
+        assert os.stat(f).st_mode & 0o777 == 0o600, "apply widened the file mode"
+        assert "AKIA" not in f.read_text()
+        assert not list(pathlib.Path(d).glob(".scrub-*")), "temp file left behind"
+
+    print("self-check ok")
+    return 0
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("root", nargs="?", default=str(pathlib.Path.home() / ".claude" / "projects"))
     ap.add_argument("--apply", action="store_true", help="write changes (default is a dry run)")
+    ap.add_argument("--self-check", action="store_true", help="run assertions and exit")
     args = ap.parse_args()
+
+    if args.self_check:
+        return self_check()
 
     root = pathlib.Path(args.root)
     if not root.is_dir():
