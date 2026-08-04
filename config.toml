@@ -347,6 +347,40 @@ install = "curl -fsSL https://raw.githubusercontent.com/3li7alaki/blueprint/main
 homepage = "https://github.com/3li7alaki/blueprint"
 desc    = "Spec layer above the code: grills the idea, then gates code against the answers"
 
+[tools.latest-version]
+enabled = true
+type    = "binary"
+bin     = "COMMAND:latest-version"
+install = "mkdir -p $HOME/.local/bin && ln -sfn $DOTFILES/scripts/latest-version $HOME/.local/bin/latest-version"
+verify_command = "command -v latest-version >/dev/null 2>&1"
+desc    = "Registry truth for 'what version is current': what [hooks.version-freshness] gates on"
+agent_guidance = """
+Never write a package version from memory. Training data has a cutoff; the registry does
+not. `latest-version <npm|pypi|crates|go|composer> <package>` prints the current stable
+version and nothing else, so it is safe to inline:
+
+    latest-version npm next            # 16.3.0
+    latest-version pypi fastapi        # 0.141.1
+    latest-version go github.com/spf13/cobra
+
+Empty output means "no opinion" (offline, unknown package, registry down), never "there is
+no such version". Answers are cached 24h, so calling it per package is cheap.
+
+This is the number half of the problem. The API half is context7: crossing a major changes
+the shape of the code, not just the digit in the manifest, so after a major jump pull that
+library's docs pinned to the new major (`resolve-library-id`, then `query-docs`) instead of
+writing the old major's idioms from memory. context7's version list is a doc-snapshot index,
+not a release feed, so never read a version number off it; `latest-version` owns that.
+
+[hooks.version-freshness] blocks this at write time, and how strict it is depends on the
+project. A manifest being born must be current: a new project has no compatibility history,
+so nothing in it has a reason to be behind, and every dependency should be resolved before
+the file is written rather than one at a time after being blocked. An existing project only
+trips on a dependency being added or moved a whole breaking version back, so the pins it
+already holds (which usually encode a constraint you cannot see) never get re-litigated. If
+a new old pin really is deliberate, retry the identical write and it passes.
+"""
+
 [tools.codex]
 enabled = true               # global default; a box w/o GPT access sets false in config.local.toml
 type    = "binary"           # already on PATH; presence-checked only
@@ -587,6 +621,38 @@ event   = "PreToolUse"
 matcher = "Bash"
 command = "DOTFILES/hooks/secret-scan.sh"
 desc    = "Pre-commit secret scan — gitleaks blocks, the local model warns on the long tail"
+
+# Stops a model writing a package version out of its training data. The pattern is the same
+# asymmetry as the secret scan: the deterministic source decides, judgment only advises.
+#   registry (scripts/latest-version) → BLOCKS. npm/PyPI/crates.io/proxy.golang.org/Packagist
+#                          are authoritative about their own releases, so a mismatch is a
+#                          fact, not an opinion. Two thresholds, set by whether the project
+#                          already exists: a manifest being born must be CURRENT (nothing
+#                          behind, since greenfield has no compatibility history to
+#                          protect), while an existing one only trips a whole breaking
+#                          version behind (major post-1.0, minor pre-1.0). Neither fires on
+#                          patch drift, or on a range that already installs the latest
+#                          (`^16.0.0` gets 16.3.0, so it is not outdated).
+#   context7 (the plugin)  → ADVISES, prompt-side only, and never supplies the number. Its
+#                          version list is an index of doc snapshots it happened to crawl:
+#                          unsorted, behind by a release, salted with canaries and branch
+#                          names. It owns the OTHER half, what the API looks like in the
+#                          major you just moved to.
+# Three things keep it quiet rather than spammy, because a noisy gate gets deleted:
+#   1. It only sees a package being ADDED or moved to a new major. Anything the manifest on
+#      disk already pins at that major passes untouched, which is where compatibility pins
+#      live (React held at 18 for a peer dep, a framework frozen mid-migration). The
+#      manifest is the allowlist, so there is no allowlist file to maintain or to rot.
+#   2. Only a whole breaking version behind fires, never patch or minor drift.
+#   3. Once per package per session. A genuinely deliberate new old-pin costs one extra
+#      turn: retry the identical write and it goes through.
+# Offline, unknown package, or registry down → silent pass, always.
+[hooks.version-freshness]
+enabled = true
+event   = "PreToolUse"
+matcher = "Write|Edit|Bash"
+command = "DOTFILES/hooks/version-freshness.py"
+desc    = "Blocks a manifest write or pinned install that is a breaking version behind the registry"
 
 # Nudges for a handoff once the session has accumulated enough conversation to be worth
 # checkpointing. Fires on Stop, so never mid-tool-call. Thresholds are ABSOLUTE tokens of

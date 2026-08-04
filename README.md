@@ -70,6 +70,7 @@ use `scripts/render-readme-catalog.py --check` to catch drift.
 | [rtk](https://github.com/rtk-ai/rtk) | CLI | Linux / macOS | on | Rust Token Killer — token-optimizing CLI proxy |
 | [mint](https://github.com/3li7alaki/mint) | CLI | Linux / macOS | on | Atomic completion ledger with snapshot-bound receipts |
 | [blueprint](https://github.com/3li7alaki/blueprint) | CLI | Linux / macOS | on | Spec layer above the code: grills the idea, then gates code against the answers |
+| latest-version | CLI | Linux / macOS | on | Registry truth for 'what version is current': what [hooks.version-freshness] gates on |
 | [codex](https://github.com/openai/codex) | CLI | Linux / macOS | on | OpenAI Codex CLI — GPT-5.6 worker |
 | [codex-security](https://github.com/openai/codex-security) | CLI | Linux / macOS | on | OpenAI Codex Security: AppSec scan of a diff, with false-positive memory across runs |
 | [opencode](https://github.com/anomalyco/opencode) | CLI | Linux / macOS | on | OpenCode — headless agent runner; hosts GLM + the local model via opencode.json |
@@ -123,6 +124,7 @@ use `scripts/render-readme-catalog.py --check` to catch drift.
 | routing | Claude hook | on | Injects model routing — dispatch bulk→codex, mechanical→glm, etc. |
 | cbm-gate | Claude hook | on | Nudges code discovery toward the codebase graph — blocks once per session, then allows |
 | secret-scan | Claude hook | on | Pre-commit secret scan — gitleaks blocks, the local model warns on the long tail |
+| version-freshness | Claude hook | on | Blocks a manifest write or pinned install that is a breaking version behind the registry |
 | handoff-checkpoint | Claude hook | on | Suggests a handoff at a seam once conversation growth crosses the band |
 | local-model | User daemon (darwin) | on | Local model endpoint (llama.cpp) — idle-unloads so it costs no RAM at rest |
 | revise-claude-md | Scheduled task | on | Weekly CLAUDE.md hygiene across ~/Projects repos |

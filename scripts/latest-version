@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# latest-version <ecosystem> <package>   →  prints the latest STABLE version, or nothing.
+#
+# Ground truth for "what version is current", so no agent ever types one from training
+# memory. Registry APIs only: no npm/pip/cargo binary needed, no auth, no account.
+#
+# Silence is the "don't know" answer (offline, unknown package, registry down). Every
+# caller MUST treat empty output as "no opinion" and carry on. A freshness check that
+# hard-fails when the network blips is a check you disable by Friday.
+#
+# Ecosystems: npm | pypi | crates | go | composer
+#
+#   latest-version npm next            → 16.3.0
+#   latest-version npm @scope/thing    → 2.1.0
+#   latest-version pypi fastapi        → 0.141.1
+#   latest-version go github.com/spf13/cobra → v1.10.2
+set -uo pipefail
+
+CACHE_DIR="${TMPDIR:-/tmp}/latest-version-cache"
+TIMEOUT=6
+
+usage() { echo "usage: latest-version {npm|pypi|crates|go|composer} <package>" >&2; exit 64; }
+[ $# -eq 2 ] || usage
+eco=$1 pkg=$2
+command -v jq >/dev/null 2>&1 || { echo "latest-version: jq required" >&2; exit 69; }
+
+# Cache key: one file per (ecosystem, package). Slashes and @ flattened so a scoped npm
+# package or a Go module path can't escape the cache dir.
+mkdir -p "$CACHE_DIR"
+key=$(printf '%s-%s' "$eco" "$pkg" | tr '/@:' '___')
+cache="$CACHE_DIR/$key"
+
+# Fresh within 24h wins. Registries move on release timescales, not minutes, and this runs
+# on a blocking hook path, and a stale-by-a-day answer is worth far more than a 200ms stall
+# on every single write.
+if [ -f "$cache" ] && [ -n "$(find "$cache" -mtime -1 2>/dev/null)" ]; then
+    cat "$cache"; exit 0
+fi
+
+# crates.io rejects a blank User-Agent outright; the rest don't care.
+fetch() { curl -sfL --max-time "$TIMEOUT" -A "latest-version (dotfiles freshness check)" "$1" 2>/dev/null; }
+
+case "$eco" in
+    npm)
+        # /<pkg>/latest follows the `latest` dist-tag, which is exactly "newest stable"
+        # Canaries and `next` publish under other tags and never show up here.
+        enc=${pkg//\//%2F}
+        ver=$(fetch "https://registry.npmjs.org/$enc/latest" | jq -r '.version // empty')
+        ;;
+    pypi)
+        # .info.version tracks what PyPI shows as the project's current release, which
+        # already excludes pre-releases unless a project has nothing but pre-releases.
+        # ponytail: not full PEP 440 ordering. Move to sorting .releases keys through
+        # `packaging` if a project that ships only pre-releases ever matters here.
+        ver=$(fetch "https://pypi.org/pypi/$pkg/json" | jq -r '.info.version // empty')
+        ;;
+    crates)
+        ver=$(fetch "https://crates.io/api/v1/crates/$pkg" | jq -r '.crate.max_stable_version // empty')
+        ;;
+    go)
+        # The module proxy requires case-escaped paths: every uppercase letter becomes
+        # !lowercase, so github.com/BurntSushi/toml → github.com/!burnt!sushi/toml.
+        esc=$(printf '%s' "$pkg" | awk '{o="";for(i=1;i<=length($0);i++){c=substr($0,i,1);o = (c ~ /[A-Z]/) ? o "!" tolower(c) : o c}print o}')
+        ver=$(fetch "https://proxy.golang.org/$esc/@latest" | jq -r '.Version // empty')
+        ;;
+    composer)
+        # p2 metadata lists newest first; skip branch aliases (dev-main, 1.x-dev).
+        ver=$(fetch "https://repo.packagist.org/p2/$pkg.json" \
+              | jq -r --arg p "$pkg" '[.packages[$p][].version | select(startswith("dev-") or endswith("-dev") | not)] | first // empty')
+        ;;
+    *) usage ;;
+esac
+
+[ -n "${ver:-}" ] || exit 0          # unknown / offline / 404 → say nothing
+printf '%s\n' "$ver" | tee "$cache"

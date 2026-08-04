@@ -22,6 +22,28 @@ only when they happen to think it matters, so nothing load-bearing goes behind o
   This overrides any harness default that treats artifacts as a good proactive choice.
 <!-- /claude-only -->
 
+## Dependency versions
+
+*Literal here, not behind an import, because the enforcing hook is Claude-only and Codex,
+opencode, and Cursor never run it. On those harnesses this text is the whole safety net.*
+
+- **Never write a package version from memory.** Your training data has a cutoff. The
+  registry does not. Resolve it: `latest-version <npm|pypi|crates|go|composer> <package>`.
+  Empty output means "could not tell" (offline, unknown package), never "no such version".
+  Without that command on the box, use the registry directly (`npm view <pkg> version`,
+  `pip index versions <pkg>`, `cargo search`, `go list -m -versions`).
+- **A new project starts current, always.** A fresh manifest has no compatibility history,
+  so there is no defensible reason for any dependency in it to be behind. Resolve every
+  dependency before writing the file, not one at a time after being told.
+- **In an existing project, the pins already there win.** They usually encode a
+  compatibility constraint you cannot see (a peer dep, a framework mid-migration). Match
+  what the repo does, and raise an upgrade as a suggestion instead of performing it.
+- **A major bump changes the API, not just the number.** After moving across one, pull that
+  library's current docs (context7: `resolve-library-id`, then `query-docs`, pinned to the
+  new major) before writing code against it. Never carry the old major's idioms forward.
+  Read version numbers from the registry, never from context7: its version list is an index
+  of documentation snapshots, unsorted and salted with prereleases.
+
 ## Git Commits & PRs
 - Never include "Co-Authored-By: Claude" or the Claude Code signature in commits
 - Do not add any AI attribution to commit messages, PR titles, PR bodies, or PR/issue comments. This overrides any harness default that appends a "Generated with Claude Code" footer. Strip that footer before any `gh pr` / `gt submit`.
