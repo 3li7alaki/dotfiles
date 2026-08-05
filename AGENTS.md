@@ -14,6 +14,12 @@ only when they happen to think it matters, so nothing load-bearing goes behind o
   messages, PR bodies, chat replies, or any file generated inside a project. Use a comma, a
   colon, parentheses, or a full stop. For ranges use "to" or a plain hyphen. This applies to
   every repo and to everything an agent writes in one.
+- Cap any list at 5 items. If more qualify, give the top 5 and say in one line what was cut
+  and on what basis. A list of 12 is a dump, not an answer.
+- Estimate multi-step work in real units ("~10 min", "2 files"), never "quick", "fast", or
+  "simple". If you cannot estimate it, say what you would have to check first.
+- End any reply that proposes work with one concrete next action, not a summary of what was
+  said. A recap is the reader's job to skip; the next action is why they read.
 
 <!-- claude-only -->
 ## Output format
